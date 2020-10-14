@@ -19,7 +19,7 @@ contract PM {
     Ripemd160 changePKH,
     Ripemd160 payoutPKH,
     int changeSats,
-    int prevLmsrBalance,
+    int prevLmsrBalance, // TODO: Use current output balance instead
     int newLmsrBalance,
     bytes prevLmsrMerklePath,
     bytes newLmsrMerklePath,
@@ -51,34 +51,36 @@ contract PM {
         prevSharesAgainst,
         prevLmsrBalance,
         prevLmsrMerklePath));
-    // require(LMSR.validate(liquidity,
-    //     newSharesFor,
-    //     newSharesAgainst,
-    //     newLmsrBalance,
-    //     newLmsrMerklePath));
+    require(LMSR.validate(liquidity,
+        newSharesFor,
+        newSharesAgainst,
+        newLmsrBalance,
+        newLmsrMerklePath));
 
-    // bytes newLeaf = sha256(payoutPKH + num2bin(sharesFor, 1) + num2bin(sharesAgainst, 1));
-    // bytes newBalanceTableRoot = MerkleTree.addLeafSafe(lastEntry,
-    //   lastMerklePath,
-    //   balanceTableRoot,
-    //   newLeaf);
+    bytes newLeaf = sha256(payoutPKH + num2bin(sharesFor, 1) + num2bin(sharesAgainst, 1));
+    bytes newBalanceTableRoot = MerkleTree.addLeafSafe(lastEntry,
+      lastMerklePath,
+      balanceTableRoot,
+      newLeaf);
 
-    // bytes newSharesStatus = shareStatus[ : 1] + num2bin(newSharesFor, 1) + num2bin(newSharesAgainst, 1);
-    // bytes newScriptCode = scriptCode[ : scriptLen - 35] + newSharesStatus + newBalanceTableRoot;
+    bytes newSharesStatus = shareStatus[ : 1]
+      + num2bin(newSharesFor, 1)
+      + num2bin(newSharesAgainst, 1);
+    bytes newScriptCode = scriptCode[ : scriptLen - 35] + newSharesStatus + newBalanceTableRoot;
 
-    // int cost = newLmsrBalance / satScalingAdjust - prevLmsrBalance / satScalingAdjust;
-    // int scaledCost = cost / 32768;
-    // int newBalance = Util.value(txPreimage) + scaledCost;
+    int cost = newLmsrBalance / PM.satScalingAdjust - prevLmsrBalance / PM.satScalingAdjust;
 
-    // bytes marketOutput = Util.buildOutput(newScriptCode, newBalance);
+    int newBalance = Util.value(txPreimage) + cost;
 
-    // // Expect the additional CHANGE output
-    // bytes changeScript = Util.buildPublicKeyHashScript(changePKH);
-    // bytes changeOutput = Util.buildOutput(changeScript, changeSats);
+    bytes marketOutput = Util.buildOutput(newScriptCode, newBalance);
 
-    // Sha256 hashOutputs = hash256(marketOutput + changeOutput);
+    // Expect the additional CHANGE output
+    bytes changeScript = Util.buildPublicKeyHashScript(changePKH);
+    bytes changeOutput = Util.buildOutput(changeScript, changeSats);
 
-    // require(hashOutputs == Util.hashOutputs(txPreimage));
+    Sha256 hashOutputs = hash256(marketOutput + changeOutput);
+
+    require(hashOutputs == Util.hashOutputs(txPreimage));
   }
 
   // public function sell(bytes txPreimage, int amount, Ripemd160 changePKH, int changeSats) {
