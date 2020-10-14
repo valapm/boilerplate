@@ -1,0 +1,7 @@
+import "./lmsr.scrypt";
+
+contract TestLmsr {
+  public function validate(int l, int n, int m, int cost, bytes merklePath) {
+    require(LMSR.validate(l, n, m, cost, merklePath));
+  }
+}
