@@ -19,9 +19,7 @@ contract PM {
     Ripemd160 changePKH,
     Ripemd160 payoutPKH,
     int changeSats,
-    int prevLmsrBalance, // TODO: Use current output balance instead
     int newLmsrBalance,
-    bytes prevLmsrMerklePath,
     bytes newLmsrMerklePath,
     bytes lastEntry,
     bytes lastMerklePath) {
@@ -47,11 +45,6 @@ contract PM {
     int newSharesAgainst = prevSharesAgainst + sharesAgainst;
 
     require(LMSR.validate(liquidity,
-        prevSharesFor,
-        prevSharesAgainst,
-        prevLmsrBalance,
-        prevLmsrMerklePath));
-    require(LMSR.validate(liquidity,
         newSharesFor,
         newSharesAgainst,
         newLmsrBalance,
@@ -64,13 +57,13 @@ contract PM {
       newLeaf);
 
     bytes newSharesStatus = shareStatus[ : 1]
-      + num2bin(newSharesFor, 1)
-      + num2bin(newSharesAgainst, 1);
+    + num2bin(newSharesFor, 1)
+    + num2bin(newSharesAgainst, 1);
     bytes newScriptCode = scriptCode[ : scriptLen - 35] + newSharesStatus + newBalanceTableRoot;
 
-    int cost = newLmsrBalance / PM.satScalingAdjust - prevLmsrBalance / PM.satScalingAdjust;
+    int prevBalance = Util.value(txPreimage);
 
-    int newBalance = Util.value(txPreimage) + cost;
+    int newBalance = newLmsrBalance / PM.satScalingAdjust;
 
     bytes marketOutput = Util.buildOutput(newScriptCode, newBalance);
 

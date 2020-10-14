@@ -86,14 +86,14 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
         script: ""
       }),
       bsv.Script.fromASM(token.lockingScript.toASM()),
-      inputSatoshis
+      prevSatBalance
     )
 
     // token output
     tx_.addOutput(
       new bsv.Transaction.Output({
         script: bsv.Script.fromASM(newLockingScript),
-        satoshis: inputSatoshis + cost
+        satoshis: newSatBalance
       })
     )
 
@@ -105,9 +105,10 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
       })
     )
 
-    const preimage = getPreimage(tx_, token.lockingScript.toASM(), inputSatoshis, inputIndex, sighashType)
+    const preimage = getPreimage(tx_, token.lockingScript.toASM(), prevSatBalance, inputIndex, sighashType)
 
-    token.txContext = { tx: tx_, inputIndex, inputSatoshis }
+    token.txContext = { tx: tx_, inputIndex, inputSatoshis: prevSatBalance }
+
     const result = token
       .buy(
         new SigHashPreimage(toHex(preimage)),
@@ -116,14 +117,27 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
         new Ripemd160(changePKH),
         new Ripemd160(payoutPKH),
         changeSats,
-        prevLmsrBalance,
         newLmsrBalance,
-        new Bytes(prevLmsrMerklePath),
         new Bytes(newLmsrMerklePath),
         new Bytes(lastEntry),
         new Bytes(lastMerklePath)
       )
       .verify()
+
+    // console.log(tx_.toString())
+    // console.log(toHex(preimage))
+    // console.log(token.dataLoad)
+    // console.log(prevSatBalance)
+
+    // console.log(sharesFor)
+    // console.log(sharesAgainst)
+    // console.log(changePKH)
+    // console.log(payoutPKH)
+    // console.log(changeSats)
+    // console.log(newLmsrBalance)
+    // console.log(newLmsrMerklePath)
+    // console.log(lastEntry)
+    // console.log(lastMerklePath)
 
     expect(result.success, result.error).to.be.true
   })
