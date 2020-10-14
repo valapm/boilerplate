@@ -69,8 +69,8 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     const satScalingAdjust = scalingFactor / satScaling
     const prevLmsrBalance = Math.round(lmsr(liquidity, globalSharesFor, globalSharesAgainst) * scalingFactor)
     const newLmsrBalance = Math.round(lmsr(liquidity, newSharesFor, newSharesAgainst) * scalingFactor)
-    const prevSatBalance = Math.round(prevLmsrBalance / satScalingAdjust)
-    const newSatBalance = Math.round(newLmsrBalance / satScalingAdjust)
+    const prevSatBalance = Math.floor(prevLmsrBalance / satScalingAdjust)
+    const newSatBalance = Math.floor(newLmsrBalance / satScalingAdjust)
     const cost = newSatBalance - prevSatBalance
     const changeSats = inputSatoshis - cost
 

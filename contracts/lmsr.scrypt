@@ -4,16 +4,15 @@ import "./merkleTree.scrypt";
 * Scalingfactor of cost = 2^35
 */
 contract LMSR {
-  static bytes lmsrTableRoot = b'23f5e718f4ca635a108fcdd56707d6a17533a33f17388f63b6925cf0b68489d2';
+  static bytes lmsrTableRoot = b'd80a046b883acf825c7cf02a2af52d707ffa5d0042cf4c2d0298bebbe51da851';
 
   static function validate(int l, int n, int m, int cost, bytes merklePath) : bool {
     require(l >= 1 && l <= 4);
     require(n >= 0 && n <= 128);
     require(m >= 0 && m <= 128);
 
-    bytes lmsrHex = num2bin(l, 1) + num2bin(n, 1) + num2bin(m, 1) + num2bin(cost, 1);
+    bytes lmsrHex = num2bin(l, 1) + num2bin(n, 1) + num2bin(m, 1) + num2bin(cost, 6);
     bytes leaf = sha256(lmsrHex);
     return MerkleTree.verifyLeaf(leaf, merklePath, LMSR.lmsrTableRoot);
   }
-
 }
