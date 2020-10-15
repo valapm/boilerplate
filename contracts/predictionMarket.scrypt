@@ -9,11 +9,8 @@ contract PM {
   // TODO: Fee for myself
   static int satScalingAdjust = 32768;
 
-  public function addLiquidity() {
-    require(true);
-  }
-
-  public function buy(SigHashPreimage txPreimage,
+  public function addEntry(SigHashPreimage txPreimage,
+    int liquidity,
     int sharesFor,
     int sharesAgainst,
     Ripemd160 changePKH,
@@ -27,36 +24,39 @@ contract PM {
     SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.ALL | SigHash.FORKID;
     require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
 
-    require(sharesFor >= 0);
-    require(sharesAgainst >= 0);
-    require(sharesFor + sharesAgainst > 0);
-
     bytes scriptCode = Util.scriptCode(txPreimage);
     int scriptLen = len(scriptCode);
 
     bytes balanceTableRoot = scriptCode[scriptLen - 32 : ];
     bytes shareStatus = scriptCode[scriptLen - 35 : scriptLen - 32];
 
-    int liquidity = unpack(shareStatus[ : 1]);
+    int prevLiquidity = unpack(shareStatus[ : 1]);
     int prevSharesFor = unpack(shareStatus[1 : 2]);
     int prevSharesAgainst = unpack(shareStatus[2 : 3]);
 
+    int newLiquidity = prevLiquidity + liquidity;
     int newSharesFor = prevSharesFor + sharesFor;
     int newSharesAgainst = prevSharesAgainst + sharesAgainst;
 
-    require(LMSR.validate(liquidity,
+    require(LMSR.validate(newLiquidity,
         newSharesFor,
         newSharesAgainst,
         newLmsrBalance,
         newLmsrMerklePath));
 
-    bytes newLeaf = sha256(payoutPKH + num2bin(sharesFor, 1) + num2bin(sharesAgainst, 1));
+    bytes newLeaf = sha256(
+      payoutPKH
+      + num2bin(liquidity, 1)
+      + num2bin(sharesFor, 1)
+      + num2bin(sharesAgainst, 1)
+      );
+
     bytes newBalanceTableRoot = MerkleTree.addLeafSafe(lastEntry,
       lastMerklePath,
       balanceTableRoot,
       newLeaf);
 
-    bytes newSharesStatus = shareStatus[ : 1]
+    bytes newSharesStatus = num2bin(newLiquidity, 1)
     + num2bin(newSharesFor, 1)
     + num2bin(newSharesAgainst, 1);
     bytes newScriptCode = scriptCode[ : scriptLen - 35] + newSharesStatus + newBalanceTableRoot;

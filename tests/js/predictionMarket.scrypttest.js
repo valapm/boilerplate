@@ -42,24 +42,26 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
   })
 
   it("should buy token", () => {
+    const liquidity = 0
     const sharesFor = 1
     const sharesAgainst = 0
 
-    const newEntry = toHex(payoutPKH + num2bin(sharesFor, 1) + num2bin(sharesAgainst, 1))
+    const newEntry = toHex(payoutPKH + num2bin(liquidity, 1) + num2bin(sharesFor, 1) + num2bin(sharesAgainst, 1))
     const newLeaf = sha256(newEntry)
 
-    const lastEntry = toHex("00".repeat(20) + "01" + "00")
+    const lastEntry = toHex("00".repeat(20) + "00" + "01" + "00")
     const lastLeaf = sha256(lastEntry)
     const lastMerklePath = sha256(lastEntry) + "01"
 
-    const liquidity = 1
+    const globalLiquidity = 1
     const globalSharesFor = 1
     const globalSharesAgainst = 1
-    const prevSharesStatus = num2bin(liquidity, 1) + num2bin(globalSharesFor, 1) + num2bin(globalSharesAgainst, 1)
+    const prevSharesStatus = num2bin(globalLiquidity, 1) + num2bin(globalSharesFor, 1) + num2bin(globalSharesAgainst, 1)
 
+    const newLiquidity = globalLiquidity + liquidity
     const newSharesFor = globalSharesFor + sharesFor
     const newSharesAgainst = globalSharesAgainst + sharesAgainst
-    const newSharesStatus = num2bin(liquidity, 1) + num2bin(newSharesFor, 1) + num2bin(newSharesAgainst, 1)
+    const newSharesStatus = num2bin(newLiquidity, 1) + num2bin(newSharesFor, 1) + num2bin(newSharesAgainst, 1)
 
     const prevBalanceTableRoot = sha256(sha256(lastEntry).repeat(2))
     const newBalanceTableRoot = sha256(sha256(lastEntry) + sha256(newEntry))
@@ -67,15 +69,15 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
     const inputSatoshis = 6000000 // Ca 10 USD
     const satScalingAdjust = scalingFactor / satScaling
-    const prevLmsrBalance = Math.round(lmsr(liquidity, globalSharesFor, globalSharesAgainst) * scalingFactor)
-    const newLmsrBalance = Math.round(lmsr(liquidity, newSharesFor, newSharesAgainst) * scalingFactor)
+    const prevLmsrBalance = Math.round(lmsr(globalLiquidity, globalSharesFor, globalSharesAgainst) * scalingFactor)
+    const newLmsrBalance = Math.round(lmsr(newLiquidity, newSharesFor, newSharesAgainst) * scalingFactor)
     const prevSatBalance = Math.floor(prevLmsrBalance / satScalingAdjust)
     const newSatBalance = Math.floor(newLmsrBalance / satScalingAdjust)
     const cost = newSatBalance - prevSatBalance
     const changeSats = inputSatoshis - cost
 
-    const prevLmsrMerklePath = getMerklePath(getPos(liquidity, globalSharesFor, globalSharesAgainst), lmsrHashes)
-    const newLmsrMerklePath = getMerklePath(getPos(liquidity, newSharesFor, newSharesAgainst), lmsrHashes)
+    const prevLmsrMerklePath = getMerklePath(getPos(globalLiquidity, globalSharesFor, globalSharesAgainst), lmsrHashes)
+    const newLmsrMerklePath = getMerklePath(getPos(newLiquidity, newSharesFor, newSharesAgainst), lmsrHashes)
 
     token.dataLoad = prevSharesStatus + prevBalanceTableRoot
 
@@ -110,8 +112,9 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     token.txContext = { tx: tx_, inputIndex, inputSatoshis: prevSatBalance }
 
     const result = token
-      .buy(
+      .addEntry(
         new SigHashPreimage(toHex(preimage)),
+        liquidity,
         sharesFor,
         sharesAgainst,
         new Ripemd160(changePKH),
@@ -129,6 +132,7 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     // console.log(token.dataLoad)
     // console.log(prevSatBalance)
 
+    // console.log(liquidity)
     // console.log(sharesFor)
     // console.log(sharesAgainst)
     // console.log(changePKH)
