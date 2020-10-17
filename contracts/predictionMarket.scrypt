@@ -14,7 +14,7 @@ contract PM {
     int sharesFor,
     int sharesAgainst,
     Ripemd160 changePKH,
-    Ripemd160 payoutPKH,
+    PubKey publicKey,
     int changeSats,
     int newLmsrBalance,
     bytes newLmsrMerklePath,
@@ -23,6 +23,10 @@ contract PM {
 
     SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.ALL | SigHash.FORKID;
     require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
+
+    require(liquidity >= 0);
+    require(sharesFor >= 0);
+    require(sharesAgainst >= 0);
 
     bytes scriptCode = Util.scriptCode(txPreimage);
     int scriptLen = len(scriptCode);
@@ -45,7 +49,7 @@ contract PM {
         newLmsrMerklePath));
 
     bytes newLeaf = sha256(
-      payoutPKH
+      publicKey
       + num2bin(liquidity, 1)
       + num2bin(sharesFor, 1)
       + num2bin(sharesAgainst, 1)
@@ -76,17 +80,110 @@ contract PM {
     require(hashOutputs == Util.hashOutputs(txPreimage));
   }
 
-  // public function sell(bytes txPreimage, int amount, Ripemd160 changePKH, int changeSats) {
-  //   require(true);
+  public function updateEntry(SigHashPreimage txPreimage,
+    int liquidity,
+    int sharesFor,
+    int sharesAgainst,
+    int prevLiquidity,
+    int prevSharesFor,
+    int prevSharesAgainst,
+    Ripemd160 changePKH,
+    PubKey publicKey,
+    Sig signature,
+    int changeSats,
+    int newLmsrBalance,
+    bytes newLmsrMerklePath,
+    bytes merklePath) {
 
-  // }
+    SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.ALL | SigHash.FORKID;
+    require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
 
-  // public function redeem(bytes txPreimage, int amount, Ripemd160 payoutPKH, Sig[] minerSigs) {
-  //   require(true);
-  // }
+    require(liquidity >= 0);
+    require(sharesFor >= 0);
+    require(sharesAgainst >= 0);
 
-  // function isDecided(Sig[] minerSigs) : bool {
-  //   // TODO: Determine if majority of hashpower voted
-  //   return false;
-  // }
+    require(checkSig(signature, publicKey));
+
+    bytes scriptCode = Util.scriptCode(txPreimage);
+    int scriptLen = len(scriptCode);
+
+    bytes balanceTableRoot = scriptCode[scriptLen - 32 : ];
+    bytes shareStatus = scriptCode[scriptLen - 35 : scriptLen - 32];
+
+    int prevGlobalLiquidity = unpack(shareStatus[ : 1]);
+    int prevGlobalSharesFor = unpack(shareStatus[1 : 2]);
+    int prevGlobalSharesAgainst = unpack(shareStatus[2 : 3]);
+
+    int liquidityChange = liquidity - prevLiquidity;
+    int sharesForChange = sharesFor - prevSharesFor;
+    int sharesAgainstChange = sharesAgainst - prevSharesAgainst;
+
+    int newGlobalLiquidity = prevGlobalLiquidity + liquidityChange;
+    int newGlobalSharesFor = prevGlobalSharesFor + sharesForChange;
+    int newGlobalSharesAgainst = prevGlobalSharesAgainst + sharesAgainstChange;
+
+    require(LMSR.validate(newGlobalLiquidity,
+        newGlobalSharesFor,
+        newGlobalSharesAgainst,
+        newLmsrBalance,
+        newLmsrMerklePath));
+
+    bytes oldLeaf = sha256(
+      publicKey
+      + num2bin(prevLiquidity, 1)
+      + num2bin(prevSharesFor, 1)
+      + num2bin(prevSharesAgainst, 1)
+      );
+
+    bytes newLeaf = sha256(
+      publicKey
+      + num2bin(liquidity, 1)
+      + num2bin(sharesFor, 1)
+      + num2bin(sharesAgainst, 1)
+      );
+
+    bytes newBalanceTableRoot = MerkleTree.updateLeaf(oldLeaf,
+      newLeaf,
+      merklePath,
+      balanceTableRoot);
+
+    bytes newSharesStatus = num2bin(newGlobalLiquidity, 1)
+    + num2bin(newGlobalSharesFor, 1)
+    + num2bin(newGlobalSharesAgainst, 1);
+    bytes newScriptCode = scriptCode[ : scriptLen - 35] + newSharesStatus + newBalanceTableRoot;
+
+    int prevBalance = Util.value(txPreimage);
+
+    int newBalance = newLmsrBalance / PM.satScalingAdjust;
+
+    bytes marketOutput = Util.buildOutput(newScriptCode, newBalance);
+
+    // Expect the additional CHANGE output
+    bytes changeScript = Util.buildPublicKeyHashScript(changePKH);
+    bytes changeOutput = Util.buildOutput(changeScript, changeSats);
+
+    Sha256 hashOutputs = hash256(marketOutput + changeOutput);
+
+    require(hashOutputs == Util.hashOutputs(txPreimage));
+  }
+
+  //   public function redeem(SigHashPreimage txPreimage,
+  //     int liquidity,
+  //     int sharesFor,
+  //     int sharesAgainst,
+  //     Ripemd160 changePKH,
+  //     Ripemd160 publicKey,
+  //     Sig signature,
+  //     int changeSats,
+  //     int newLmsrBalance,
+  //     bytes merklePath,
+  //     Sig[] minerSigs) {
+  //     require(true);
+  //   }
+
+  //   function isDecided(Sig[] minerSigs) : bool {
+  //     // TODO: Determine if majority of hashpower voted
+  //     return false;
+  //   }
 }
+
