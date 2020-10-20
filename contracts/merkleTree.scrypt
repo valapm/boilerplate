@@ -91,7 +91,7 @@ library MerkleTree {
       }
     }
 
-    if (!joined) {
+    if (! joined) {
       merkleValue = sha256(oldMerkleRoot + merkleValue);
     }
 
