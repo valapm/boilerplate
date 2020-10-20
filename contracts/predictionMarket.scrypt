@@ -1,13 +1,19 @@
 import "util.scrypt";
 import "./lmsr.scrypt";
 import "./merkleTree.scrypt";
+import "./rabin.scrypt";
 
 contract PM {
-  // PubKey[] minerKeys; // PubKeys of voting miners
+  // int[] minerKeys; // PubKeys of voting miners
   // int[] minerVotes; // Must add to 100
+  bytes minerKeys;
+
   // TODO: fee for liquidity providers?
   // TODO: Fee for myself
+
+  static int satScaling = 1048576;
   static int satScalingAdjust = 32768;
+  static int rabinSigN = 0;
 
   public function addEntry(SigHashPreimage txPreimage,
     int liquidity,
@@ -167,23 +173,56 @@ contract PM {
     require(hashOutputs == Util.hashOutputs(txPreimage));
   }
 
-  //   public function redeem(SigHashPreimage txPreimage,
-  //     int liquidity,
-  //     int sharesFor,
-  //     int sharesAgainst,
-  //     Ripemd160 changePKH,
-  //     Ripemd160 publicKey,
-  //     Sig signature,
-  //     int changeSats,
-  //     int newLmsrBalance,
-  //     bytes merklePath,
-  //     Sig[] minerSigs) {
-  //     require(true);
-  //   }
+  // public function redeem(SigHashPreimage txPreimage,
+  //   int liquidity,
+  //   int sharesFor,
+  //   int sharesAgainst,
+  //   Ripemd160 changePKH,
+  //   PubKey publicKey,
+  //   Sig signature,
+  //   int changeSats,
+  //   bytes merklePath,
+  //   // int[] minerPos,
+  //   bool[] minerPos,
+  //   Sig[] minerSigs) {
 
-  //   function isDecided(Sig[] minerSigs) : bool {
-  //     // TODO: Determine if majority of hashpower voted
-  //     return false;
+  //   require(true);
+  // }
+
+  // public function testSigs(bytes result,
+  //   bool[] minerPos,
+  //   int[] minerSigs,
+  //   int[] paddingByteCounts) {
+  //   require(this.isDecided(result, minerPos, minerSigs, paddingByteCounts));
+  // }
+
+  // function isDecided(bytes result,
+  //   bool[] minerPos,
+  //   int[] minerSigs,
+  //   int[] paddingByteCounts) : bool {
+
+  //   RabinSignature rabin = new RabinSignature();
+
+  //   int miners = len(this.minerKeys) / 33;
+  //   int percentage = 0;
+  //   int i = 0;
+  //   int j = 0;
+  //   loop (10) {
+  //     if (i < miners) {
+  //       if (minerPos[i]) {
+  //         int minerSig = minerSigs[j];
+  //         int minerPubKey = unpack(this.minerKeys[i * 33 : i * 33 + 32]);
+  //         bytes padding = num2bin(0, paddingByteCounts[j]);
+
+  //         require(rabin.verifySig(minerSig, result, padding, minerPubKey));
+
+  //         percentage = percentage + unpack(this.minerKeys[i * 33 + 32 : i * 33 + 33]);
+  //         j = j + 1;
+  //       }
+  //       i = i + 1;
+  //     }
   //   }
+  //   return percentage >= 50;
+  // }
 }
 
