@@ -1,0 +1,89 @@
+contract FixMath {
+
+  static int precision = 16;
+  static int scale = 65536; // 2 ^ precision
+
+  static int ln2 = 45426;
+  static int ln10 = 150902;
+
+  static function exp(int x) : int {
+    int n = x;
+
+    loop (16) {
+      n = n -(n *(FixMath.log(n) - x)) / FixMath.scale;
+    }
+
+    return n;
+  }
+
+  /**
+  * Works for numbers between 100 and 0.001
+  */
+  static function log2(int x) : int {
+    if (x > 6553600 || x < 66) {
+      exit(false); // loops arent sufficient;
+    }
+
+    int b = 32768;
+    int y = 0;
+
+    // If less than 1
+    loop (10) {
+      if (x < FixMath.scale) {
+        x = x * 2;
+        y = y - FixMath.scale;
+      }
+    }
+
+    // If more than 1
+    loop (10) {
+      if (x >= 2 * FixMath.scale) {
+        x = x / 2;
+        y = y + FixMath.scale;
+      }
+    }
+
+    int z = x;
+
+    // loop precision times
+    loop (16) {
+      z = z * z / FixMath.scale;
+      if (z >= 2 * FixMath.scale) {
+        z = z / 2;
+        y = y + b;
+      }
+
+      b = b / 2;
+    }
+
+    return y;
+  }
+
+  static function log(int x) : int {
+    return FixMath.log2(x) * FixMath.ln2 / FixMath.scale;
+  }
+
+  static function log10(int x) : int {
+    return FixMath.log2(x) * FixMath.ln10 / FixMath.scale;
+  }
+
+  public function testLog2(int x) {
+    require(FixMath.log2(1 * 65536) == 0 * 65536);
+    require(FixMath.log2(32 * 65536) == 5 * 65536);
+    require(FixMath.log2(64 * 65536) == 6 * 65536);
+  }
+
+  // public function testLog(int x) {
+  //   require(FixMath.log(1 * 65536) == 0 * 65536);
+  //   require(FixMath.log(32 * 65536) == 5 * 65536);
+  //   require(FixMath.log(64 * 65536) == 6 * 65536);
+  // }
+
+  public function testLog10(int x) {
+    require(FixMath.log10(1 * 65536) == 0 * 65536);
+    int test100 = FixMath.log10(100 * 65536);
+    // require(test100 <= 21 * 65536 / 10 && test100 > 19 * 65536 / 10);
+    require(test100 / 65536 == 2);
+    // require(FixMath.log10(1000 * 65536) == 3 * 65536);
+  }
+}
