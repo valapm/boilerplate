@@ -1,0 +1,8 @@
+import "./fixMath.scrypt";
+
+contract MathTest {
+  public function test(int i) {
+    int n = FixMath.exp(5 * 65536);
+    require(true);
+  }
+}
