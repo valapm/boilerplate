@@ -54,7 +54,7 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
     const prevBalanceTableRoot = sha256(sha256(lastEntry).repeat(2))
     const newBalanceTableRoot = sha256(sha256(lastEntry) + sha256(newEntry))
-    const newLockingScript = lockingScriptCodePart + " OP_RETURN " + newSharesStatus + newBalanceTableRoot
+    const newLockingScript = [lockingScriptCodePart, newSharesStatus + newBalanceTableRoot].join(" ")
 
     const inputSatoshis = 6000000 // Ca 10 USD
     const satScalingAdjust = scalingFactor / satScaling
@@ -64,14 +64,14 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     const newSatBalance = Math.floor(newLmsrBalance / satScalingAdjust)
     const cost = newSatBalance - prevSatBalance
     const changeSats = inputSatoshis - cost
-    console.log("in: ", prevSatBalance)
-    console.log("out: ", newSatBalance)
-    console.log("change: ", changeSats)
+    // console.log("in: ", prevSatBalance)
+    // console.log("out: ", newSatBalance)
+    // console.log("change: ", changeSats)
 
     const prevLmsrMerklePath = getMerklePath(getPos(globalLiquidity, globalSharesFor, globalSharesAgainst), lmsrHashes)
     const newLmsrMerklePath = getMerklePath(getPos(newLiquidity, newSharesFor, newSharesAgainst), lmsrHashes)
 
-    token.dataLoad = prevSharesStatus + prevBalanceTableRoot
+    token.setDataPart(prevSharesStatus + prevBalanceTableRoot)
 
     tx_.addInput(
       new bsv.Transaction.Input({
@@ -121,7 +121,7 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
     // console.log(tx_.toString())
     // console.log(toHex(preimage))
-    // console.log(token.dataLoad)
+    // console.log(prevSharesStatus + prevBalanceTableRoot)
     // console.log(prevSatBalance)
 
     // console.log(liquidity)
@@ -172,7 +172,7 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
     const prevBalanceTableRoot = sha256(sha256(prevEntry).repeat(2))
     const newBalanceTableRoot = sha256(sha256(newEntry).repeat(2))
-    const newLockingScript = lockingScriptCodePart + " OP_RETURN " + newSharesStatus + newBalanceTableRoot
+    const newLockingScript = [lockingScriptCodePart, newSharesStatus + newBalanceTableRoot].join(" ")
 
     const inputSatoshis = 6000000 // Ca 10 USD
     const satScalingAdjust = scalingFactor / satScaling
@@ -184,9 +184,9 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     const newSatBalance = Math.floor(newLmsrBalance / satScalingAdjust)
     const cost = newSatBalance - prevSatBalance
     const changeSats = inputSatoshis - cost
-    console.log("in: ", prevSatBalance)
-    console.log("out: ", newSatBalance)
-    console.log("change: ", changeSats)
+    // console.log("in: ", prevSatBalance)
+    // console.log("out: ", newSatBalance)
+    // console.log("change: ", changeSats)
 
     // return true
 
@@ -196,7 +196,7 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
       lmsrHashes
     )
 
-    token.dataLoad = prevSharesStatus + prevBalanceTableRoot
+    token.setDataPart(prevSharesStatus + prevBalanceTableRoot)
 
     tx_.addInput(
       new bsv.Transaction.Input({
@@ -251,7 +251,7 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
     // console.log(tx_.toString())
     // console.log(toHex(preimage))
-    // console.log(token.dataLoad)
+    // console.log(prevSharesStatus + prevBalanceTableRoot)
     // console.log(prevSatBalance)
 
     // console.log(liquidity)
