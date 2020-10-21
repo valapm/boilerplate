@@ -23,7 +23,7 @@ const Token = buildContractClass(compileContract("predictionMarket.scrypt"))
 
 describe("Test sCrypt contract merkleToken In Javascript", () => {
   const Signature = bsv.crypto.Signature
-  const sighashType = Signature.SIGHASH_ANYONECANPAY | Signature.SIGHASH_ALL | Signature.SIGHASH_FORKID
+  const sighashType = Signature.SIGHASH_ANYONECANPAY | Signature.SIGHASH_SINGLE | Signature.SIGHASH_FORKID
 
   const privateKey = new bsv.PrivateKey.fromRandom("testnet")
   const publicKey = bsv.PublicKey.fromPrivateKey(privateKey)
@@ -88,14 +88,6 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
       new bsv.Transaction.Output({
         script: bsv.Script.fromASM(newLockingScript),
         satoshis: newSatBalance
-      })
-    )
-
-    // change output
-    tx_.addOutput(
-      new bsv.Transaction.Output({
-        script: bsv.Script.buildPublicKeyHashOut(publicKey.toAddress()),
-        satoshis: changeSats
       })
     )
 
@@ -213,14 +205,6 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
       new bsv.Transaction.Output({
         script: bsv.Script.fromASM(newLockingScript),
         satoshis: newSatBalance
-      })
-    )
-
-    // change output
-    tx_.addOutput(
-      new bsv.Transaction.Output({
-        script: bsv.Script.buildPublicKeyHashOut(publicKey.toAddress()),
-        satoshis: changeSats
       })
     )
 
