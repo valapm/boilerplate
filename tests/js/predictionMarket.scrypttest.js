@@ -66,7 +66,9 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
     const prevBalanceTableRoot = sha256(sha256(lastEntry).repeat(2))
     const newBalanceTableRoot = sha256(sha256(lastEntry) + sha256(newEntry))
-    const newLockingScript = [lockingScriptCodePart, newSharesStatus + newBalanceTableRoot].join(" ")
+    const newStatus = "00" + "00" + newSharesStatus + newBalanceTableRoot
+    const prevStatus = "00" + "00" + prevSharesStatus + prevBalanceTableRoot
+    const newLockingScript = [lockingScriptCodePart, newStatus].join(" ")
 
     const inputSatoshis = 6000000 // Ca 10 USD
     const satScalingAdjust = scalingFactor / satScaling
@@ -83,7 +85,7 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     const prevLmsrMerklePath = getMerklePath(getPos(globalLiquidity, globalSharesFor, globalSharesAgainst), lmsrHashes)
     const newLmsrMerklePath = getMerklePath(getPos(newLiquidity, newSharesFor, newSharesAgainst), lmsrHashes)
 
-    token.setDataPart(prevSharesStatus + prevBalanceTableRoot)
+    token.setDataPart(prevStatus)
 
     tx_.addInput(
       new bsv.Transaction.Input({
@@ -176,7 +178,9 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
     const prevBalanceTableRoot = sha256(sha256(prevEntry).repeat(2))
     const newBalanceTableRoot = sha256(sha256(newEntry).repeat(2))
-    const newLockingScript = [lockingScriptCodePart, newSharesStatus + newBalanceTableRoot].join(" ")
+    const newStatus = "00" + "00" + newSharesStatus + newBalanceTableRoot
+    const prevStatus = "00" + "00" + prevSharesStatus + prevBalanceTableRoot
+    const newLockingScript = [lockingScriptCodePart, newStatus].join(" ")
 
     const inputSatoshis = 6000000 // Ca 10 USD
     const satScalingAdjust = scalingFactor / satScaling
@@ -200,7 +204,7 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
       lmsrHashes
     )
 
-    token.setDataPart(prevSharesStatus + prevBalanceTableRoot)
+    token.setDataPart(prevStatus)
 
     tx_.addInput(
       new bsv.Transaction.Input({
@@ -306,33 +310,23 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     expect(result.success, result.error).to.be.true
   })
 
-  // result = testAddEntry(1, 0, 0, 1, 1, 1)
-  // expect(result.success, result.error).to.be.true
-})
-
-describe("Test redeem function", () => {
-  let tx_
-
-  beforeEach(() => {
-    tx_ = new bsv.Transaction()
-  })
-
   it("should verify signatures", () => {
-    const vote = 1 //bsv.Opcode.OP_TRUE
-    const priv1 = generatePrivKey()
-    const priv2 = generatePrivKey()
-    const pub1 = privKeyToPubKey(priv1.p, priv1.q)
-    const pub2 = privKeyToPubKey(priv2.p, priv2.q)
-    const pub1Hex = bigNum2bin(pub1, 125)
-    const pub2Hex = bigNum2bin(pub2, 125)
+    const inputSatoshis = 6000000
+    const vote = 1
+    // const priv1 = generatePrivKey()
+    // const priv2 = generatePrivKey()
+    // const pub1 = privKeyToPubKey(priv1.p, priv1.q)
+    // const pub2 = privKeyToPubKey(priv2.p, priv2.q)
+    // const pub1Hex = bigNum2bin(pub1, 125)
+    // const pub2Hex = bigNum2bin(pub2, 125)
     const sig1 = sign(num2bin(vote, 1), priv1.p, priv1.q, pub1)
     const sig2 = sign(num2bin(vote, 1), priv2.p, priv2.q, pub2)
     const sig1Hex = bigNum2bin(sig1.signature, 125)
     const sig2Hex = bigNum2bin(sig2.signature, 125)
 
-    const miner1Votes = 40
-    const miner2Votes = 60
-    const minerPubs = [pub1Hex, num2bin(miner1Votes, 1), pub2Hex, num2bin(miner2Votes, 1)].join("")
+    // const miner1Votes = 40
+    // const miner2Votes = 60
+    // const minerPubs = [pub1Hex, num2bin(miner1Votes, 1), pub2Hex, num2bin(miner2Votes, 1)].join("")
     const minerSigs = [
       num2bin(0, 1),
       sig1Hex,
@@ -342,63 +336,93 @@ describe("Test redeem function", () => {
       num2bin(sig2.paddingByteCount, 1)
     ].join("")
 
-    const token = new Token(new Bytes(minerPubs))
+    const newOpReturn = "01" + "01" + "00".repeat(35)
+    const newLockingScript = [lockingScriptCodePart, newOpReturn].join(" ")
 
-    // lockingScriptCodePart = token.codePart.toASM()
+    token.setDataPart("00".repeat(37))
 
-    const result = token.isDecided(vote, new Bytes(minerSigs)).verify()
+    tx_.addInput(
+      new bsv.Transaction.Input({
+        prevTxId: dummyTxId,
+        outputIndex: 0,
+        script: ""
+      }),
+      bsv.Script.fromASM(token.lockingScript.toASM()),
+      inputSatoshis
+    )
+
+    // token output
+    tx_.addOutput(
+      new bsv.Transaction.Output({
+        script: bsv.Script.fromASM(newLockingScript),
+        satoshis: inputSatoshis
+      })
+    )
+
+    const preimage = getPreimage(tx_, token.lockingScript.toASM(), inputSatoshis, inputIndex, sighashType)
+
+    token.txContext = { tx: tx_, inputIndex, inputSatoshis }
+
+    // console.log(minerPubs)
+    // console.log(toHex(preimage))
+    // console.log(vote)
+    // console.log(minerSigs)
+    // console.log(tx_.toString())
+    // console.log("00".repeat(37))
+
+    const result = token.decide(new SigHashPreimage(toHex(preimage)), vote, new Bytes(minerSigs)).verify()
     expect(result.success, result.error).to.be.true
   })
 
-  it("should verify partial signatures", () => {
-    const vote = 1 //bsv.Opcode.OP_TRUE
-    const priv1 = generatePrivKey()
-    const priv2 = generatePrivKey()
-    const pub1 = privKeyToPubKey(priv1.p, priv1.q)
-    const pub2 = privKeyToPubKey(priv2.p, priv2.q)
-    const pub1Hex = bigNum2bin(pub1, 125)
-    const pub2Hex = bigNum2bin(pub2, 125)
-    const sig1 = sign(num2bin(vote, 1), priv1.p, priv1.q, pub1)
-    const sig2 = sign(num2bin(vote, 1), priv2.p, priv2.q, pub2)
-    const sig1Hex = bigNum2bin(sig1.signature, 125)
-    const sig2Hex = bigNum2bin(sig2.signature, 125)
+  // it("should verify partial signatures", () => {
+  //   const vote = 1 //bsv.Opcode.OP_TRUE
+  //   const priv1 = generatePrivKey()
+  //   const priv2 = generatePrivKey()
+  //   const pub1 = privKeyToPubKey(priv1.p, priv1.q)
+  //   const pub2 = privKeyToPubKey(priv2.p, priv2.q)
+  //   const pub1Hex = bigNum2bin(pub1, 125)
+  //   const pub2Hex = bigNum2bin(pub2, 125)
+  //   const sig1 = sign(num2bin(vote, 1), priv1.p, priv1.q, pub1)
+  //   const sig2 = sign(num2bin(vote, 1), priv2.p, priv2.q, pub2)
+  //   const sig1Hex = bigNum2bin(sig1.signature, 125)
+  //   const sig2Hex = bigNum2bin(sig2.signature, 125)
 
-    const miner1Votes = 40
-    const miner2Votes = 60
-    const minerPubs = [pub1Hex, num2bin(miner1Votes, 1), pub2Hex, num2bin(miner2Votes, 1)].join("")
-    const minerSigs = [num2bin(1, 1), sig2Hex, num2bin(sig2.paddingByteCount, 1)].join("")
+  //   const miner1Votes = 40
+  //   const miner2Votes = 60
+  //   const minerPubs = [pub1Hex, num2bin(miner1Votes, 1), pub2Hex, num2bin(miner2Votes, 1)].join("")
+  //   const minerSigs = [num2bin(1, 1), sig2Hex, num2bin(sig2.paddingByteCount, 1)].join("")
 
-    const token = new Token(new Bytes(minerPubs))
+  //   const token = new Token(new Bytes(minerPubs))
 
-    // lockingScriptCodePart = token.codePart.toASM()
+  //   // lockingScriptCodePart = token.codePart.toASM()
 
-    const result = token.isDecided(vote, new Bytes(minerSigs)).verify()
-    expect(result.success, result.error).to.be.true
-  })
+  //   const result = token.isDecided(vote, new Bytes(minerSigs)).verify()
+  //   expect(result.success, result.error).to.be.true
+  // })
 
-  it("should not verify insufficient signatures", () => {
-    const vote = 1 //bsv.Opcode.OP_TRUE
-    const priv1 = generatePrivKey()
-    const priv2 = generatePrivKey()
-    const pub1 = privKeyToPubKey(priv1.p, priv1.q)
-    const pub2 = privKeyToPubKey(priv2.p, priv2.q)
-    const pub1Hex = bigNum2bin(pub1, 125)
-    const pub2Hex = bigNum2bin(pub2, 125)
-    const sig1 = sign(num2bin(vote, 1), priv1.p, priv1.q, pub1)
-    const sig2 = sign(num2bin(vote, 1), priv2.p, priv2.q, pub2)
-    const sig1Hex = bigNum2bin(sig1.signature, 125)
-    const sig2Hex = bigNum2bin(sig2.signature, 125)
+  // it("should not verify insufficient signatures", () => {
+  //   const vote = 1 //bsv.Opcode.OP_TRUE
+  //   const priv1 = generatePrivKey()
+  //   const priv2 = generatePrivKey()
+  //   const pub1 = privKeyToPubKey(priv1.p, priv1.q)
+  //   const pub2 = privKeyToPubKey(priv2.p, priv2.q)
+  //   const pub1Hex = bigNum2bin(pub1, 125)
+  //   const pub2Hex = bigNum2bin(pub2, 125)
+  //   const sig1 = sign(num2bin(vote, 1), priv1.p, priv1.q, pub1)
+  //   const sig2 = sign(num2bin(vote, 1), priv2.p, priv2.q, pub2)
+  //   const sig1Hex = bigNum2bin(sig1.signature, 125)
+  //   const sig2Hex = bigNum2bin(sig2.signature, 125)
 
-    const miner1Votes = 40
-    const miner2Votes = 60
-    const minerPubs = [pub1Hex, num2bin(miner1Votes, 1), pub2Hex, num2bin(miner2Votes, 1)].join("")
-    const minerSigs = [num2bin(0, 1), sig1Hex, num2bin(sig1.paddingByteCount, 1)].join("")
+  //   const miner1Votes = 40
+  //   const miner2Votes = 60
+  //   const minerPubs = [pub1Hex, num2bin(miner1Votes, 1), pub2Hex, num2bin(miner2Votes, 1)].join("")
+  //   const minerSigs = [num2bin(0, 1), sig1Hex, num2bin(sig1.paddingByteCount, 1)].join("")
 
-    const token = new Token(new Bytes(minerPubs))
+  //   const token = new Token(new Bytes(minerPubs))
 
-    // lockingScriptCodePart = token.codePart.toASM()
+  //   // lockingScriptCodePart = token.codePart.toASM()
 
-    const result = token.isDecided(vote, new Bytes(minerSigs)).verify()
-    expect(result.success, result.error).to.be.false
-  })
+  //   const result = token.isDecided(vote, new Bytes(minerSigs)).verify()
+  //   expect(result.success, result.error).to.be.false
+  // })
 })
