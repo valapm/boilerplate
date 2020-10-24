@@ -174,43 +174,53 @@ contract PM {
   //   bool[] minerPos,
   //   Sig[] minerSigs) {
 
+  //       SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
+  //   require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
+
   //   require(true);
   // }
 
   // public function testSigs(bytes result,
-  //   bool[] minerPos,
-  //   int[] minerSigs,
-  //   int[] paddingByteCounts) {
-  //   require(this.isDecided(result, minerPos, minerSigs, paddingByteCounts));
+  //   bytes minerSigs) {
+  //   require(true);
+  //   // require(this.isDecided(result, minerSigs));
   // }
 
-  // function isDecided(bytes result,
-  //   bool[] minerPos,
+  // bool[] minerPos,
   //   int[] minerSigs,
-  //   int[] paddingByteCounts) : bool {
+  //   int[] paddingByteCounts
 
-  //   RabinSignature rabin = new RabinSignature();
+  public function isDecided(int result,
+    bytes minerSigs
+    ) {
 
-  //   int miners = len(this.minerKeys) / 33;
-  //   int percentage = 0;
-  //   int i = 0;
-  //   int j = 0;
-  //   loop (10) {
-  //     if (i < miners) {
-  //       if (minerPos[i]) {
-  //         int minerSig = minerSigs[j];
-  //         int minerPubKey = unpack(this.minerKeys[i * 33 : i * 33 + 32]);
-  //         bytes padding = num2bin(0, paddingByteCounts[j]);
+    RabinSignature rabin = new RabinSignature();
 
-  //         require(rabin.verifySig(minerSig, result, padding, minerPubKey));
+    int miners = len(this.minerKeys) / 126;
+    int minerSigsLen = len(minerSigs) / 127;
+    int percentage = 0;
+    int i = 0;
+    int lastMinerPos = -1;
+    loop (10) {
+      if (i < minerSigsLen) {
+        int minerPos = unpack(minerSigs[i * 127 : i * 127 + 1]);
 
-  //         percentage = percentage + unpack(this.minerKeys[i * 33 + 32 : i * 33 + 33]);
-  //         j = j + 1;
-  //       }
-  //       i = i + 1;
-  //     }
-  //   }
-  //   return percentage >= 50;
-  // }
+        // Make sure no signature is used twice
+        require(minerPos > lastMinerPos);
+        lastMinerPos = minerPos;
+
+        int minerPubKey = unpack(this.minerKeys[minerPos * 126 : minerPos * 126 + 125]);
+        int minerSig = unpack(minerSigs[i * 127 + 1 : i * 127 + 126]);
+        int paddingCount = unpack(minerSigs[i * 127 + 126 : i * 127 + 127]);
+        bytes padding = num2bin(0, paddingCount);
+
+        require(rabin.verifySig(minerSig, num2bin(result, 1), padding, minerPubKey));
+
+        percentage = percentage + unpack(this.minerKeys[i * 126 + 125 : i * 126 + 126]);
+        i = i + 1;
+      }
+    }
+    require(percentage > 50);
+  }
 }
 

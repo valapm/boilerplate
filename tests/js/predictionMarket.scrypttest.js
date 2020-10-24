@@ -6,6 +6,7 @@ const {
   getPreimage,
   num2bin,
   SigHashPreimage,
+  OpCodeType,
   Ripemd160,
   Sig,
   Bytes,
@@ -16,6 +17,7 @@ const { inputIndex, tx, compileContract, dummyTxId } = require("../../helper")
 const { sha256 } = require("pmutils").sha
 const { scalingFactor, lmsr, getLmsrShas, getPos } = require("pmutils").lmsr
 const { getMerklePath } = require("pmutils").merkleTree
+const { num2bin: bigNum2bin } = require("pmutils").hex
 const { generatePrivKey, privKeyToPubKey, sign } = require("rabinsig")
 const { decimalToHexString } = require("rabinsig/src/utils")
 
@@ -34,6 +36,16 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
   const satScaling = 2 ** 20
   const lmsrHashes = getLmsrShas()
+
+  const priv1 = generatePrivKey()
+  const priv2 = generatePrivKey()
+  const pub1 = privKeyToPubKey(priv1.p, priv1.q)
+  const pub2 = privKeyToPubKey(priv2.p, priv2.q)
+  const pub1Hex = bigNum2bin(pub1, 125)
+  const pub2Hex = bigNum2bin(pub2, 125)
+  const miner1Votes = 40
+  const miner2Votes = 60
+  const minerPubs = [pub1Hex, num2bin(miner1Votes, 1), pub2Hex, num2bin(miner2Votes, 1)].join("")
 
   let token, lockingScriptCodePart, tx_
 
@@ -254,7 +266,7 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
   beforeEach(() => {
     tx_ = new bsv.Transaction()
-    token = new Token(new Bytes("1234"))
+    token = new Token(new Bytes(minerPubs))
 
     lockingScriptCodePart = token.codePart.toASM()
   })
@@ -298,40 +310,43 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
   // expect(result.success, result.error).to.be.true
 })
 
-// describe("test redeem function", () => {
-//   let tx_
+describe("Test redeem function", () => {
+  let tx_
 
-//   beforeEach(() => {
-//     tx_ = new bsv.Transaction()
-//   })
+  beforeEach(() => {
+    tx_ = new bsv.Transaction()
+  })
 
-//   it("should verify signatures", () => {
-//     const result = 1
-//     const priv1 = generatePrivKey()
-//     const priv2 = generatePrivKey()
-//     const pub1 = privKeyToPubKey(priv1.p, priv1.q)
-//     const pub2 = privKeyToPubKey(priv2.p, priv2.q)
-//     const pub1Hex = decimalToHexString(pub1)
-//     const pub2Hex = decimalToHexString(pub2)
-//     const sig1 = sign(num2bin(result, 1), priv1.p, priv1.q, pub1)
-//     const sig2 = sign(num2bin(result, 1), priv2.p, priv2.q, pub2)
-//     const sig1Hex = decimalToHexString(sig1.signature)
-//     const sig2Hex = decimalToHexString(sig2.signature)
+  it("should verify signatures", () => {
+    const vote = 1 //bsv.Opcode.OP_TRUE
+    const priv1 = generatePrivKey()
+    const priv2 = generatePrivKey()
+    const pub1 = privKeyToPubKey(priv1.p, priv1.q)
+    const pub2 = privKeyToPubKey(priv2.p, priv2.q)
+    const pub1Hex = bigNum2bin(pub1, 125)
+    const pub2Hex = bigNum2bin(pub2, 125)
+    const sig1 = sign(num2bin(vote, 1), priv1.p, priv1.q, pub1)
+    const sig2 = sign(num2bin(vote, 1), priv2.p, priv2.q, pub2)
+    const sig1Hex = bigNum2bin(sig1.signature, 125)
+    const sig2Hex = bigNum2bin(sig2.signature, 125)
 
-//     const miner1Votes = 40
-//     const miner2Votes = 60
-//     const minerPubs = [pub1Hex, num2bin(miner1Votes, 1), pub2Hex, num2bin(miner2Votes, 1)].join("")
+    const miner1Votes = 40
+    const miner2Votes = 60
+    const minerPubs = [pub1Hex, num2bin(miner1Votes, 1), pub2Hex, num2bin(miner2Votes, 1)].join("")
+    const minerSigs = [
+      num2bin(0, 1),
+      sig1Hex,
+      num2bin(sig1.paddingByteCount, 1),
+      num2bin(1, 1),
+      sig2Hex,
+      num2bin(sig2.paddingByteCount, 1)
+    ].join("")
 
-//     console.log(pub1Hex)
-//     console.log(pub2Hex)
-//     console.log(sig1Hex)
-//     console.log(sig2Hex)
-//     console.log(minerPubs)
-//     console.log(new Bytes(minerPubs))
+    const token = new Token(new Bytes(minerPubs))
 
-//     const token = new Token(new Bytes(minerPubs))
+    // lockingScriptCodePart = token.codePart.toASM()
 
-//     lockingScriptCodePart = token.codePart.toASM()
-//     return true
-//   })
-// })
+    const result = token.isDecided(vote, new Bytes(minerSigs)).verify()
+    expect(result.success, result.error).to.be.true
+  })
+})
