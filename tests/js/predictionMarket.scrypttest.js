@@ -460,4 +460,59 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     const result = token.decide(new SigHashPreimage(toHex(preimage)), vote, new Bytes(minerSigs)).verify()
     expect(result.success, result.error).to.be.false
   })
+
+  it("should not verify signatures twice", () => {
+    const inputSatoshis = 6000000
+    const vote = 1
+    const sig1 = sign(num2bin(vote, 1), priv1.p, priv1.q, pub1)
+    const sig2 = sign(num2bin(vote, 1), priv2.p, priv2.q, pub2)
+    const sig1Hex = bigNum2bin(sig1.signature, 125)
+    const sig2Hex = bigNum2bin(sig2.signature, 125)
+
+    const minerSigs = [
+      num2bin(0, 1),
+      sig1Hex,
+      num2bin(sig1.paddingByteCount, 1),
+      num2bin(1, 1),
+      sig2Hex,
+      num2bin(sig2.paddingByteCount, 1)
+    ].join("")
+
+    const newOpReturn = "01" + "01" + "00".repeat(35)
+    const newLockingScript = [lockingScriptCodePart, newOpReturn].join(" ")
+
+    token.setDataPart("01" + "00".repeat(36))
+
+    tx_.addInput(
+      new bsv.Transaction.Input({
+        prevTxId: dummyTxId,
+        outputIndex: 0,
+        script: ""
+      }),
+      bsv.Script.fromASM(token.lockingScript.toASM()),
+      inputSatoshis
+    )
+
+    // token output
+    tx_.addOutput(
+      new bsv.Transaction.Output({
+        script: bsv.Script.fromASM(newLockingScript),
+        satoshis: inputSatoshis
+      })
+    )
+
+    const preimage = getPreimage(tx_, token.lockingScript.toASM(), inputSatoshis, inputIndex, sighashType)
+
+    token.txContext = { tx: tx_, inputIndex, inputSatoshis }
+
+    // console.log(minerPubs)
+    // console.log(toHex(preimage))
+    // console.log(vote)
+    // console.log(minerSigs)
+    // console.log(tx_.toString())
+    // console.log("00".repeat(37))
+
+    const result = token.decide(new SigHashPreimage(toHex(preimage)), vote, new Bytes(minerSigs)).verify()
+    expect(result.success, result.error).to.be.false
+  })
 })
