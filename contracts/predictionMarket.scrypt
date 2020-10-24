@@ -216,7 +216,7 @@ contract PM {
 
         require(rabin.verifySig(minerSig, num2bin(result, 1), padding, minerPubKey));
 
-        percentage = percentage + unpack(this.minerKeys[i * 126 + 125 : i * 126 + 126]);
+        percentage = percentage + unpack(this.minerKeys[minerPos * 126 + 125 : minerPos * 126 + 126]);
         i = i + 1;
       }
     }
