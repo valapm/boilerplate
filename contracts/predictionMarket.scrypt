@@ -4,8 +4,6 @@ import "./merkleTree.scrypt";
 import "./rabin.scrypt";
 
 contract PM {
-  // int[] minerKeys; // PubKeys of voting miners
-  // int[] minerVotes; // Must add to 100
   bytes minerKeys;
 
   // TODO: fee for liquidity providers?
