@@ -9,7 +9,7 @@ contract OptimalPushTx {
         // require(Tx.checkPreimage(txPreimage));
 
         // 92 bytes
-        require(Tx.checkPreimageOpt(txPreimage));
+        require(Tx.checkPreimageOpt_(txPreimage));
 
         // use this if you want to set sighash type explicitly
         // require(Tx.checkPreimageOpt_(txPreimage));
