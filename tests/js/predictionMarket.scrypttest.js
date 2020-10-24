@@ -511,4 +511,89 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     const result = token.decide(new SigHashPreimage(toHex(preimage)), vote, new Bytes(minerSigs)).verify()
     expect(result.success, result.error).to.be.false
   })
+
+  it("should redeem tokens", () => {
+    const prevLiquidity = 0
+    const prevSharesFor = 3
+    const prevSharesAgainst = 2
+
+    const globalLiquidity = 12
+    const globalSharesFor = 15
+    const globalSharesAgainst = 33
+
+    const prevEntry = toHex(
+      pubKeyHex + num2bin(prevLiquidity, 1) + num2bin(prevSharesFor, 1) + num2bin(prevSharesAgainst, 1)
+    )
+    const newEntry = toHex(num2bin(prevLiquidity, 1), num2bin(0, 1), num2bin(0, 1))
+
+    const prevLeaf = sha256(prevEntry)
+    const merklePath = prevLeaf + "01"
+
+    const sharesStatus = num2bin(globalLiquidity, 1) + num2bin(globalSharesFor, 1) + num2bin(globalSharesAgainst, 1)
+
+    const prevBalanceTableRoot = sha256(sha256(prevEntry).repeat(2))
+    const newBalanceTableRoot = sha256(sha256(newEntry).repeat(2))
+    const newStatus = "01" + "01" + sharesStatus + newBalanceTableRoot
+    const prevStatus = "01" + "01" + sharesStatus + prevBalanceTableRoot
+    const newLockingScript = [lockingScriptCodePart, newStatus].join(" ")
+
+    const inputSatoshis = 6000000 // Ca 10 USD
+    const newSatBalance = inputSatoshis - prevSharesFor * satScaling
+
+    token.setDataPart(prevStatus)
+
+    tx_.addInput(
+      new bsv.Transaction.Input({
+        prevTxId: dummyTxId,
+        outputIndex: 0,
+        script: ""
+      }),
+      bsv.Script.fromASM(token.lockingScript.toASM()),
+      inputSatoshis
+    )
+
+    // token output
+    tx_.addOutput(
+      new bsv.Transaction.Output({
+        script: bsv.Script.fromASM(newLockingScript),
+        satoshis: newSatBalance
+      })
+    )
+
+    const preimage = getPreimage(tx_, token.lockingScript.toASM(), inputSatoshis, inputIndex, sighashType)
+
+    token.txContext = { tx: tx_, inputIndex, inputSatoshis }
+
+    sig = signTx(tx_, privateKey, token.lockingScript.toASM(), inputSatoshis, inputIndex, sighashType)
+
+    const result = token
+      .redeem(
+        new SigHashPreimage(toHex(preimage)),
+        prevLiquidity,
+        prevSharesFor,
+        prevSharesAgainst,
+        new PubKey(pubKeyHex),
+        new Sig(toHex(sig)),
+        new Bytes(merklePath)
+      )
+      .verify()
+
+    // console.log(tx_.toString())
+    // console.log(toHex(preimage))
+    // console.log(prevSharesStatus + prevBalanceTableRoot)
+    // console.log(prevSatBalance)
+
+    // console.log(liquidity)
+    // console.log(sharesFor)
+    // console.log(sharesAgainst)
+    // console.log(changePKH)
+    // console.log(payoutPKH)
+    // console.log(changeSats)
+    // console.log(newLmsrBalance)
+    // console.log(newLmsrMerklePath)
+    // console.log(lastEntry)
+    // console.log(lastMerklePath)
+
+    return result
+  })
 })
