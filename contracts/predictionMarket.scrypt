@@ -19,9 +19,7 @@ contract PM {
     int liquidity,
     int sharesFor,
     int sharesAgainst,
-    Ripemd160 changePKH,
     PubKey publicKey,
-    int changeSats,
     int newLmsrBalance,
     bytes newLmsrMerklePath,
     bytes lastEntry,
@@ -87,10 +85,8 @@ contract PM {
     int prevLiquidity,
     int prevSharesFor,
     int prevSharesAgainst,
-    Ripemd160 changePKH,
     PubKey publicKey,
     Sig signature,
-    int changeSats,
     int newLmsrBalance,
     bytes newLmsrMerklePath,
     bytes merklePath) {
@@ -161,24 +157,58 @@ contract PM {
     require(hash256(marketOutput) == Util.hashOutputs(txPreimage));
   }
 
-  // public function redeem(SigHashPreimage txPreimage,
-  //   int liquidity,
-  //   int sharesFor,
-  //   int sharesAgainst,
-  //   Ripemd160 changePKH,
-  //   PubKey publicKey,
-  //   Sig signature,
-  //   int changeSats,
-  //   bytes merklePath,
-  //   // int[] minerPos,
-  //   bool[] minerPos,
-  //   Sig[] minerSigs) {
+  public function redeem(SigHashPreimage txPreimage,
+    int prevLiquidity,
+    int prevSharesFor,
+    int prevSharesAgainst,
+    PubKey publicKey,
+    Sig signature,
+    bytes merklePath) {
 
-  //       SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
-  //   require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
+    SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
+    require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
 
-  //   require(true);
-  // }
+    bytes scriptCode = Util.scriptCode(txPreimage);
+    int scriptLen = len(scriptCode);
+
+    bytes decisionStatus = scriptCode[scriptLen - 37 : scriptLen - 35];
+    int isDecided = unpack(decisionStatus[ : 1]);
+    int decision = unpack(decisionStatus[1:]);
+
+    require(isDecided == 1);
+
+    // Verify previous balance
+    bytes balanceTableRoot = scriptCode[scriptLen - 32 : ];
+
+    bytes oldLeaf = sha256(
+      publicKey
+      + num2bin(prevLiquidity, 1)
+      + num2bin(prevSharesFor, 1)
+      + num2bin(prevSharesAgainst, 1)
+      );
+
+    bytes newLeaf = sha256(
+      publicKey
+      + num2bin(prevLiquidity, 1)
+      + num2bin(0, 1)
+      + num2bin(0, 1)
+      );
+
+    bytes newBalanceTableRoot = MerkleTree.updateLeaf(oldLeaf,
+      newLeaf,
+      merklePath,
+      balanceTableRoot);
+
+    int balance = (decision == 1) ? prevSharesFor : prevSharesAgainst;
+    int satBalance = balance * PM.satScaling;
+
+    int newContractBalance = Util.value(txPreimage) - satBalance;
+
+    bytes newScriptCode = scriptCode[ : scriptLen - 32] + newBalanceTableRoot;
+    bytes marketOutput = Util.buildOutput(newScriptCode, newContractBalance);
+
+    require(hash256(marketOutput) == Util.hashOutputs(txPreimage));
+  }
 
   public function decide(SigHashPreimage txPreimage,
     int result,
