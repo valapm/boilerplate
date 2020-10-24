@@ -180,19 +180,22 @@ contract PM {
   //   require(true);
   // }
 
-  // public function testSigs(bytes result,
-  //   bytes minerSigs) {
-  //   require(true);
-  //   // require(this.isDecided(result, minerSigs));
-  // }
-
-  // bool[] minerPos,
-  //   int[] minerSigs,
-  //   int[] paddingByteCounts
-
-  public function isDecided(int result,
+  public function decide(SigHashPreimage txPreimage,
+    int result,
     bytes minerSigs
     ) {
+
+    SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
+    require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
+
+    bytes scriptCode = Util.scriptCode(txPreimage);
+    int scriptLen = len(scriptCode);
+
+    bytes decisionStatus = scriptCode[scriptLen - 37 : scriptLen - 35];
+    int isDecided = unpack(decisionStatus[ : 1]);
+
+    // require(isDecided == 0);
+    if (isDecided) exit(false);
 
     RabinSignature rabin = new RabinSignature();
 
@@ -200,7 +203,7 @@ contract PM {
     int minerSigsLen = len(minerSigs) / 127;
     int percentage = 0;
     int i = 0;
-    int lastMinerPos = -1;
+    int lastMinerPos = - 1;
     loop (10) {
       if (i < minerSigsLen) {
         int minerPos = unpack(minerSigs[i * 127 : i * 127 + 1]);
@@ -221,6 +224,14 @@ contract PM {
       }
     }
     require(percentage > 50);
+
+    bytes newDecisionStatus = b'01' + num2bin(result, 1);
+    bytes newScriptCode = scriptCode[ : scriptLen - 37] + newDecisionStatus + scriptCode[scriptLen - 35 : ];
+
+    bytes marketOutput = Util.buildOutput(newScriptCode, Util.value(txPreimage));
+
+    require(hash256(marketOutput) == Util.hashOutputs(txPreimage));
   }
 }
+
 
