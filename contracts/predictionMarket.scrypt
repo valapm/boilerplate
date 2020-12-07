@@ -166,12 +166,14 @@ contract PM {
     SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
     require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
 
+    require(checkSig(signature, publicKey));
+
     bytes scriptCode = Util.scriptCode(txPreimage);
     int scriptLen = len(scriptCode);
 
     bytes decisionStatus = scriptCode[scriptLen - 37 : scriptLen - 35];
     int isDecided = unpack(decisionStatus[ : 1]);
-    int decision = unpack(decisionStatus[1:]);
+    int decision = unpack(decisionStatus[1 : ]);
 
     require(isDecided == 1);
 
@@ -197,7 +199,7 @@ contract PM {
       merklePath,
       balanceTableRoot);
 
-    int balance = (decision == 1) ? prevSharesFor : prevSharesAgainst;
+    int balance =(decision == 1) ? prevSharesFor : prevSharesAgainst;
     int satBalance = balance * PM.satScaling;
 
     int newContractBalance = Util.value(txPreimage) - satBalance;
