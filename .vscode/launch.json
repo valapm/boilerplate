@@ -19,6 +19,25 @@
       ]
     },
     {
+      "args": [
+        "-r",
+        "ts-node/register",
+        "--timeout",
+        "120000",
+        "--colors",
+        "${workspaceFolder}/tests/js/predictionMarket.scrypttest.js",
+        "--scryptc=/home/merlin/.vscode-oss/extensions/bsv-scrypt.scrypt-0.4.13/compiler/scryptc/linux/scryptc"
+      ],
+      "internalConsoleOptions": "openOnSessionStart",
+      "name": "Mocha Tests",
+      "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
+      "request": "launch",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "type": "pwa-node"
+    },
+    {
       "type": "scrypt",
       "request": "launch",
       "name": "Debug Matrix",
