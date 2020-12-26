@@ -162,6 +162,7 @@ contract PM {
     PubKey publicKey,
     Sig signature,
     bytes merklePath) {
+    // TODO: Adjust global balance as well.
 
     SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
     require(Util.checkPreimageSigHashType(txPreimage, sigHashType));

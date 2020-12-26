@@ -21,13 +21,14 @@ const { num2bin: bigNum2bin } = require("pmutils").hex
 const { generatePrivKey, privKeyToPubKey, sign } = require("rabinsig")
 const { decimalToHexString } = require("rabinsig/src/utils")
 
-const Token = buildContractClass(compileContract("predictionMarket.scrypt"))
+// const Token = buildContractClass(compileContract("predictionMarket.scrypt"))
+const Token = buildContractClass(require("../../out/predictionMarket_desc.json"))
 
 describe("Test sCrypt contract merkleToken In Javascript", () => {
   const Signature = bsv.crypto.Signature
   const sighashType = Signature.SIGHASH_ANYONECANPAY | Signature.SIGHASH_SINGLE | Signature.SIGHASH_FORKID
 
-  const privateKey = new bsv.PrivateKey.fromRandom("testnet")
+  const privateKey = bsv.PrivateKey.fromString("Kys3cyL5HZ4upzwWsnirv4urUeczpnweiJ2zY5EDBCkRZ5j2TTdj")
   const publicKey = bsv.PublicKey.fromPrivateKey(privateKey)
   const pubKeyHex = toHex(publicKey)
   const pkh = bsv.crypto.Hash.sha256ripemd160(publicKey.toBuffer())
@@ -37,8 +38,16 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
   const satScaling = 2 ** 20
   const lmsrHashes = getLmsrShas()
 
-  const priv1 = generatePrivKey()
-  const priv2 = generatePrivKey()
+  const priv1 = {
+    p: 3097117482495218740761570398276008894011381249145414887346233174147008460690669803628686127894575795412733149071918669075694907431747167762627687052467n,
+    q: 650047001204168007801848889418948532353073326909497585177081016045346562912146630794965372241635285465610094863279373295872825824127728241709483771067n
+  }
+
+  const priv2 = {
+    p: 5282996768621071377953148561714230757875959595062017918330039194973991105026912034418577469175391947647260152227014115175065212479767996019477136300223n,
+    q: 650047001204168007801848889418948532353073326909497585177081016045346562912146630794965372241635285465610094863279373295872825824127728241709483771067n
+  }
+
   const pub1 = privKeyToPubKey(priv1.p, priv1.q)
   const pub2 = privKeyToPubKey(priv2.p, priv2.q)
   const pub1Hex = bigNum2bin(pub1, 125)
@@ -47,13 +56,18 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
   const miner2Votes = 60
   const minerPubs = [pub1Hex, num2bin(miner1Votes, 1), pub2Hex, num2bin(miner2Votes, 1)].join("")
 
+  const marketString =
+    "25c78e732e3af9aa593d1f71912775bcb2ada1bf 007b0022007200650073006f006c007600650022003a002200740065007300740022007d "
+
   let token, lockingScriptCodePart, tx_
 
   function testAddEntry(liquidity, sharesFor, sharesAgainst, globalLiquidity, globalSharesFor, globalSharesAgainst) {
     const newEntry = toHex(pubKeyHex + num2bin(liquidity, 1) + num2bin(sharesFor, 1) + num2bin(sharesAgainst, 1))
     const newLeaf = sha256(newEntry)
 
-    const lastEntry = toHex("00".repeat(20) + "00" + "01" + "00")
+    const lastEntry = toHex(
+      pubKeyHex + num2bin(globalLiquidity, 1) + num2bin(globalSharesFor, 1) + num2bin(globalSharesAgainst, 1)
+    )
     const lastLeaf = sha256(lastEntry)
     const lastMerklePath = lastLeaf + "01"
 
@@ -66,8 +80,8 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
     const prevBalanceTableRoot = sha256(sha256(lastEntry).repeat(2))
     const newBalanceTableRoot = sha256(sha256(lastEntry) + sha256(newEntry))
-    const newStatus = "00" + "00" + newSharesStatus + newBalanceTableRoot
-    const prevStatus = "00" + "00" + prevSharesStatus + prevBalanceTableRoot
+    const newStatus = marketString + "00" + "00" + newSharesStatus + newBalanceTableRoot
+    const prevStatus = marketString + "00" + "00" + prevSharesStatus + prevBalanceTableRoot
     const newLockingScript = [lockingScriptCodePart, newStatus].join(" ")
 
     const inputSatoshis = 6000000 // Ca 10 USD
@@ -85,11 +99,15 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     const prevLmsrMerklePath = getMerklePath(getPos(globalLiquidity, globalSharesFor, globalSharesAgainst), lmsrHashes)
     const newLmsrMerklePath = getMerklePath(getPos(newLiquidity, newSharesFor, newSharesAgainst), lmsrHashes)
 
+    // console.log(lastEntry)
+    // console.log(prevBalanceTableRoot)
+    // console.log(newBalanceTableRoot)
+
     token.setDataPart(prevStatus)
 
     tx_.addInput(
       new bsv.Transaction.Input({
-        prevTxId: dummyTxId,
+        prevTxId: "ff5322f5c3fbb22804faf456382f3cf81b8fa202f05258f491a3ee0ed85dd1e1",
         outputIndex: 0,
         script: ""
       }),
@@ -108,6 +126,8 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     const preimage = getPreimage(tx_, token.lockingScript.toASM(), prevSatBalance, inputIndex, sighashType)
 
     token.txContext = { tx: tx_, inputIndex, inputSatoshis: prevSatBalance }
+
+    // console.log(toHex(preimage))
 
     const result = token
       .addEntry(
@@ -176,8 +196,8 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
     const prevBalanceTableRoot = sha256(sha256(prevEntry).repeat(2))
     const newBalanceTableRoot = sha256(sha256(newEntry).repeat(2))
-    const newStatus = "00" + "00" + newSharesStatus + newBalanceTableRoot
-    const prevStatus = "00" + "00" + prevSharesStatus + prevBalanceTableRoot
+    const newStatus = marketString + "00" + "00" + newSharesStatus + newBalanceTableRoot
+    const prevStatus = marketString + "00" + "00" + prevSharesStatus + prevBalanceTableRoot
     const newLockingScript = [lockingScriptCodePart, newStatus].join(" ")
 
     const inputSatoshis = 6000000 // Ca 10 USD
@@ -206,7 +226,7 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
     tx_.addInput(
       new bsv.Transaction.Input({
-        prevTxId: dummyTxId,
+        prevTxId: "ff5322f5c3fbb22804faf456382f3cf81b8fa202f05258f491a3ee0ed85dd1e1",
         outputIndex: 0,
         script: ""
       }),
@@ -272,7 +292,7 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
   })
 
   it("should buy token", () => {
-    result = testAddEntry(0, 1, 0, 1, 1, 1)
+    result = testAddEntry(0, 1, 0, 1, 0, 0)
     expect(result.success, result.error).to.be.true
   })
 
@@ -287,7 +307,7 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
   })
 
   it("should buy more tokens", () => {
-    result = testUpdateEntry(0, 2, 0, 0, 1, 0, 1, 1, 1)
+    result = testUpdateEntry(1, 1, 0, 1, 0, 0, 1, 0, 0)
     expect(result.success, result.error).to.be.true
   })
 
@@ -513,13 +533,13 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
   })
 
   it("should redeem tokens", () => {
-    const prevLiquidity = 0
-    const prevSharesFor = 3
-    const prevSharesAgainst = 2
+    const prevLiquidity = 1
+    const prevSharesFor = 1
+    const prevSharesAgainst = 0
 
-    const globalLiquidity = 12
-    const globalSharesFor = 15
-    const globalSharesAgainst = 33
+    const globalLiquidity = 1
+    const globalSharesFor = 1
+    const globalSharesAgainst = 0
 
     const prevEntry = toHex(
       pubKeyHex + num2bin(prevLiquidity, 1) + num2bin(prevSharesFor, 1) + num2bin(prevSharesAgainst, 1)
