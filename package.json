@@ -40,7 +40,7 @@
     "@types/node": "^13.7.6",
     "chai": "^4.2.0",
     "mocha": "^7.0.1",
-    "pmutils": "git+https://github.com/MerlinB/pmutils.git",
+    "pmutils": "file:../pmutils",
     "rabinsig": "git+https://github.com/sCrypt-Inc/rabin.git",
     "ts-node": "^8.6.2",
     "tsconfig-paths": "^3.9.0",

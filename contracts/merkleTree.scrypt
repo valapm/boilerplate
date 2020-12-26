@@ -44,6 +44,7 @@ library MerkleTree {
           oldMerkleValue = sha256(oldMerkleValue + oldNeighbor);
           newMerkleValue = sha256(newMerkleValue + newNeighbor);
         } else {
+          require(oldNeighbor != oldMerkleValue); // Make sure that leaf isn't a filler.
           oldMerkleValue = sha256(oldNeighbor + oldMerkleValue);
           newMerkleValue = sha256(newNeighbor + newMerkleValue);
         }
@@ -73,7 +74,7 @@ library MerkleTree {
 
         if (left) {
           if (joined) {
-            require(sibling == merkleValue);
+            require(sibling == merkleValue); // Make sure that lastLeaf really is the last leaf.
             merkleValue = sha256(merkleValue + sibling);
           } else {
             require(sibling == lastLeafValue);
