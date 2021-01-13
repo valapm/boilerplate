@@ -101,6 +101,11 @@ contract PM {
     bytes scriptCode = Util.scriptCode(txPreimage);
     int scriptLen = len(scriptCode);
 
+    // Make sure that market isn't closed yet.
+    bytes decisionStatus = scriptCode[scriptLen - 37 : scriptLen - 35];
+    int isDecided = unpack(decisionStatus[ : 1]);
+    require(isDecided == 0);
+
     bytes balanceTableRoot = scriptCode[scriptLen - 32 : ];
     bytes shareStatus = scriptCode[scriptLen - 35 : scriptLen - 32];
 
