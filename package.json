@@ -7,9 +7,9 @@
     "node": ">=12.0.0"
   },
   "scripts": {
-    "test": "mocha -r ts-node/register 'tests/**/*.scrypttest.*'  --reporter spec --timeout 600000 -g '' ",
+    "test": "mocha -r ts-node/register tests/**/*scrypttest.*  --reporter spec --timeout 600000",
     "single-test": "mocha -r ts-node/register --reporter spec --timeout 120000",
-    "testnet": "node ./testnet.js",
+    "testnet": "node tests/testnet/demo.js",
     "watch": "node watcher.js",
     "gen-desc": "node watcher.js --gen-desc"
   },
@@ -27,17 +27,18 @@
   "author": "sCrypt Inc",
   "license": "MIT",
   "dependencies": {
-    "axios": "^0.21.2",
+    "axios": "^0.21.1",
     "glob": "^7.1.6",
-    "minimist": "^1.2.6",
+    "minimist": "^1.2.5",
     "rabinsig": "^1.0.0",
-    "scryptlib": "^0.16.0",
+    "scryptlib": "^0.4.5",
     "watch": "^1.0.2"
   },
   "devDependencies": {
     "@types/chai": "^4.2.8",
     "@types/mocha": "^7.0.1",
     "@types/node": "^13.7.6",
+    "bitcoin-predict": "file:../bitcoin-predict",
     "chai": "^4.2.0",
     "mocha": "^7.0.1",
     "ts-node": "^8.10.2",

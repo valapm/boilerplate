@@ -14,15 +14,15 @@ const {
   signTx
 } = require("scryptlib")
 const { inputIndex, tx, compileContract, dummyTxId } = require("../../helper")
-const { sha256 } = require("pmutils").sha
-const { scalingFactor, lmsr, getLmsrShas, getPos } = require("pmutils").lmsr
-const { getMerklePath } = require("pmutils").merkleTree
-const { num2bin: bigNum2bin } = require("pmutils").hex
+const { sha256 } = require("bitcoin-predict").sha
+const { ScalingFactor, lmsr, getLmsrShas, getPos } = require("bitcoin-predict").lmsr
+const { getMerklePath } = require("bitcoin-predict").merkleTree
+const { int2Hex: bigNum2bin } = require("bitcoin-predict").hex
 const { generatePrivKey, privKeyToPubKey, sign } = require("rabinsig")
 const { decimalToHexString } = require("rabinsig/src/utils")
 
-// const Token = buildContractClass(compileContract("predictionMarket.scrypt"))
-const Token = buildContractClass(require("../../out/predictionMarket_desc.json"))
+const Token = buildContractClass(compileContract("predictionMarket.scrypt"))
+// const Token = buildContractClass(require("../../out/predictionMarket_desc.json"))
 
 describe("Test sCrypt contract merkleToken In Javascript", () => {
   const Signature = bsv.crypto.Signature
@@ -85,9 +85,14 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     const newLockingScript = [lockingScriptCodePart, newStatus].join(" ")
 
     const inputSatoshis = 6000000 // Ca 10 USD
-    const satScalingAdjust = scalingFactor / satScaling
-    const prevLmsrBalance = Math.round(lmsr(globalLiquidity, globalSharesFor, globalSharesAgainst) * scalingFactor)
-    const newLmsrBalance = Math.round(lmsr(newLiquidity, newSharesFor, newSharesAgainst) * scalingFactor)
+    const satScalingAdjust = ScalingFactor / satScaling
+    const prevLmsrBalance = Math.round(
+      lmsr({ liquidity: globalLiquidity, sharesFor: globalSharesFor, sharesAgainst: globalSharesAgainst }) *
+        ScalingFactor
+    )
+    const newLmsrBalance = Math.round(
+      lmsr({ liquidity: newLiquidity, sharesFor: newSharesFor, sharesAgainst: newSharesAgainst }) * ScalingFactor
+    )
     const prevSatBalance = Math.floor(prevLmsrBalance / satScalingAdjust)
     const newSatBalance = Math.floor(newLmsrBalance / satScalingAdjust)
     const cost = newSatBalance - prevSatBalance
@@ -96,8 +101,14 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     // console.log("out: ", newSatBalance)
     // console.log("change: ", changeSats)
 
-    const prevLmsrMerklePath = getMerklePath(getPos(globalLiquidity, globalSharesFor, globalSharesAgainst), lmsrHashes)
-    const newLmsrMerklePath = getMerklePath(getPos(newLiquidity, newSharesFor, newSharesAgainst), lmsrHashes)
+    const prevLmsrMerklePath = getMerklePath(
+      getPos({ liquidity: globalLiquidity, sharesFor: globalSharesFor, sharesAgainst: globalSharesAgainst }),
+      lmsrHashes
+    )
+    const newLmsrMerklePath = getMerklePath(
+      getPos({ liquidity: newLiquidity, sharesFor: newSharesFor, sharesAgainst: newSharesAgainst }),
+      lmsrHashes
+    )
 
     // console.log(lastEntry)
     // console.log(prevBalanceTableRoot)
@@ -201,10 +212,14 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     const newLockingScript = [lockingScriptCodePart, newStatus].join(" ")
 
     const inputSatoshis = 6000000 // Ca 10 USD
-    const satScalingAdjust = scalingFactor / satScaling
-    const prevLmsrBalance = Math.round(lmsr(globalLiquidity, globalSharesFor, globalSharesAgainst) * scalingFactor)
+    const satScalingAdjust = ScalingFactor / satScaling
+    const prevLmsrBalance = Math.round(
+      lmsr({ liquidity: globalLiquidity, sharesFor: globalSharesFor, sharesAgainst: globalSharesAgainst }) *
+        ScalingFactor
+    )
     const newLmsrBalance = Math.round(
-      lmsr(newGlobalLiquidity, newGlobalSharesFor, newGlobalSharesAgainst) * scalingFactor
+      lmsr({ liquidity: newGlobalLiquidity, sharesFor: newGlobalSharesFor, sharesAgainst: newGlobalSharesAgainst }) *
+        ScalingFactor
     )
     const prevSatBalance = Math.floor(prevLmsrBalance / satScalingAdjust)
     const newSatBalance = Math.floor(newLmsrBalance / satScalingAdjust)
@@ -216,9 +231,12 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
     // return true
 
-    const prevLmsrMerklePath = getMerklePath(getPos(globalLiquidity, globalSharesFor, globalSharesAgainst), lmsrHashes)
+    const prevLmsrMerklePath = getMerklePath(
+      getPos({ liqudity: globalLiquidity, sharesFor: globalSharesFor, sharesAgainst: globalSharesAgainst }),
+      lmsrHashes
+    )
     const newLmsrMerklePath = getMerklePath(
-      getPos(newGlobalLiquidity, newGlobalSharesFor, newGlobalSharesAgainst),
+      getPos({ liquidity: newGlobalLiquidity, sharesFor: newGlobalSharesFor, sharesAgainst: newGlobalSharesAgainst }),
       lmsrHashes
     )
 
