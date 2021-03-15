@@ -6,12 +6,17 @@ import "./rabin.scrypt";
 contract PM {
   bytes minerKeys;
 
-  // TODO: fee for liquidity providers?
-  // TODO: Fee for myself
+  // TODO: Variable fee per trade for market creator
+  // TODO: Flat fee per trade for myself
 
   static int satScaling = 1048576;
   static int satScalingAdjust = 32768;
   static int rabinSigN = 0;
+
+  // Oracles
+  static int rabinKeyLength = 126;
+  static int oracleLength = 127; // rabin key + 1 byte
+  static int signatureLength = 128; // rabin key + 2 bytes
 
   public function addEntry(SigHashPreimage txPreimage,
     int liquidity,
@@ -235,27 +240,27 @@ contract PM {
 
     RabinSignature rabin = new RabinSignature();
 
-    int miners = len(this.minerKeys) / 126;
-    int minerSigsLen = len(minerSigs) / 127;
+    int miners = len(this.minerKeys) / oracleLength;
+    int minerSigsLen = len(minerSigs) / signatureLength;
     int percentage = 0;
     int i = 0;
     int lastMinerPos = - 1;
     loop (10) {
       if (i < minerSigsLen) {
-        int minerPos = unpack(minerSigs[i * 127 : i * 127 + 1]);
+        int minerPos = unpack(minerSigs[i * signatureLength : i * signatureLength + 1]);
 
         // Make sure no signature is used twice
         require(minerPos > lastMinerPos);
         lastMinerPos = minerPos;
 
-        int minerPubKey = unpack(this.minerKeys[minerPos * 126 : minerPos * 126 + 125]);
-        int minerSig = unpack(minerSigs[i * 127 + 1 : i * 127 + 126]);
-        int paddingCount = unpack(minerSigs[i * 127 + 126 : i * 127 + 127]);
+        int minerPubKey = unpack(this.minerKeys[minerPos * oracleLength : minerPos * oracleLength + rabinKeyLength]);
+        int minerSig = unpack(minerSigs[i * signatureLength + 1 : i * signatureLength + rabinKeyLength + 1]);
+        int paddingCount = unpack(minerSigs[i * signatureLength + rabinKeyLength + 1 : i * signatureLength + signatureLength]);
         bytes padding = num2bin(0, paddingCount);
 
         require(rabin.verifySig(minerSig, num2bin(result, 1), padding, minerPubKey));
 
-        percentage = percentage + unpack(this.minerKeys[minerPos * 126 + 125 : minerPos * 126 + 126]);
+        percentage = percentage + unpack(this.minerKeys[minerPos * oracleLength + rabinKeyLength : minerPos * oracleLength + oracleLength]);
         i = i + 1;
       }
     }
