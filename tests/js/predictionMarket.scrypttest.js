@@ -4,7 +4,6 @@ const {
   buildContractClass,
   toHex,
   getPreimage,
-  num2bin,
   SigHashPreimage,
   OpCodeType,
   Ripemd160,
@@ -17,9 +16,11 @@ const { inputIndex, tx, compileContract, dummyTxId } = require("../../helper")
 const { sha256 } = require("bitcoin-predict").sha
 const { ScalingFactor, lmsr, getLmsrShas, getPos } = require("bitcoin-predict").lmsr
 const { getMerklePath } = require("bitcoin-predict").merkleTree
-const { int2Hex: bigNum2bin } = require("bitcoin-predict").hex
+const { int2Hex } = require("bitcoin-predict").hex
 const { generatePrivKey, privKeyToPubKey, sign } = require("rabinsig")
 const { decimalToHexString } = require("rabinsig/src/utils")
+
+const rabinKeyLength = 126
 
 const Token = buildContractClass(compileContract("predictionMarket.scrypt"))
 // const Token = buildContractClass(require("../../out/predictionMarket_desc.json"))
@@ -50,11 +51,11 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
 
   const pub1 = privKeyToPubKey(priv1.p, priv1.q)
   const pub2 = privKeyToPubKey(priv2.p, priv2.q)
-  const pub1Hex = bigNum2bin(pub1, 125)
-  const pub2Hex = bigNum2bin(pub2, 125)
+  const pub1Hex = int2Hex(pub1, rabinKeyLength)
+  const pub2Hex = int2Hex(pub2, rabinKeyLength)
   const miner1Votes = 40
   const miner2Votes = 60
-  const minerPubs = [pub1Hex, num2bin(miner1Votes, 1), pub2Hex, num2bin(miner2Votes, 1)].join("")
+  const minerPubs = [pub1Hex, int2Hex(miner1Votes, 1), pub2Hex, int2Hex(miner2Votes, 1)].join("")
 
   const marketString =
     "25c78e732e3af9aa593d1f71912775bcb2ada1bf 007b0022007200650073006f006c007600650022003a002200740065007300740022007d "
@@ -62,21 +63,21 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
   let token, lockingScriptCodePart, tx_
 
   function testAddEntry(liquidity, sharesFor, sharesAgainst, globalLiquidity, globalSharesFor, globalSharesAgainst) {
-    const newEntry = toHex(pubKeyHex + num2bin(liquidity, 1) + num2bin(sharesFor, 1) + num2bin(sharesAgainst, 1))
+    const newEntry = toHex(pubKeyHex + int2Hex(liquidity, 1) + int2Hex(sharesFor, 1) + int2Hex(sharesAgainst, 1))
     const newLeaf = sha256(newEntry)
 
     const lastEntry = toHex(
-      pubKeyHex + num2bin(globalLiquidity, 1) + num2bin(globalSharesFor, 1) + num2bin(globalSharesAgainst, 1)
+      pubKeyHex + int2Hex(globalLiquidity, 1) + int2Hex(globalSharesFor, 1) + int2Hex(globalSharesAgainst, 1)
     )
     const lastLeaf = sha256(lastEntry)
     const lastMerklePath = lastLeaf + "01"
 
-    const prevSharesStatus = num2bin(globalLiquidity, 1) + num2bin(globalSharesFor, 1) + num2bin(globalSharesAgainst, 1)
+    const prevSharesStatus = int2Hex(globalLiquidity, 1) + int2Hex(globalSharesFor, 1) + int2Hex(globalSharesAgainst, 1)
 
     const newLiquidity = globalLiquidity + liquidity
     const newSharesFor = globalSharesFor + sharesFor
     const newSharesAgainst = globalSharesAgainst + sharesAgainst
-    const newSharesStatus = num2bin(newLiquidity, 1) + num2bin(newSharesFor, 1) + num2bin(newSharesAgainst, 1)
+    const newSharesStatus = int2Hex(newLiquidity, 1) + int2Hex(newSharesFor, 1) + int2Hex(newSharesAgainst, 1)
 
     const prevBalanceTableRoot = sha256(sha256(lastEntry).repeat(2))
     const newBalanceTableRoot = sha256(sha256(lastEntry) + sha256(newEntry))
@@ -184,16 +185,16 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     globalSharesFor,
     globalSharesAgainst
   ) {
-    const newEntry = toHex(pubKeyHex + num2bin(liquidity, 1) + num2bin(sharesFor, 1) + num2bin(sharesAgainst, 1))
+    const newEntry = toHex(pubKeyHex + int2Hex(liquidity, 1) + int2Hex(sharesFor, 1) + int2Hex(sharesAgainst, 1))
     const newLeaf = sha256(newEntry)
 
     const prevEntry = toHex(
-      pubKeyHex + num2bin(prevLiquidity, 1) + num2bin(prevSharesFor, 1) + num2bin(prevSharesAgainst, 1)
+      pubKeyHex + int2Hex(prevLiquidity, 1) + int2Hex(prevSharesFor, 1) + int2Hex(prevSharesAgainst, 1)
     )
     const prevLeaf = sha256(prevEntry)
     const merklePath = prevLeaf + "01"
 
-    const prevSharesStatus = num2bin(globalLiquidity, 1) + num2bin(globalSharesFor, 1) + num2bin(globalSharesAgainst, 1)
+    const prevSharesStatus = int2Hex(globalLiquidity, 1) + int2Hex(globalSharesFor, 1) + int2Hex(globalSharesAgainst, 1)
 
     const liquidityChange = liquidity - prevLiquidity
     const sharesForChange = sharesFor - prevSharesFor
@@ -203,7 +204,7 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     const newGlobalSharesFor = globalSharesFor + sharesForChange
     const newGlobalSharesAgainst = globalSharesAgainst + sharesAgainstChange
     const newSharesStatus =
-      num2bin(newGlobalLiquidity, 1) + num2bin(newGlobalSharesFor, 1) + num2bin(newGlobalSharesAgainst, 1)
+      int2Hex(newGlobalLiquidity, 1) + int2Hex(newGlobalSharesFor, 1) + int2Hex(newGlobalSharesAgainst, 1)
 
     const prevBalanceTableRoot = sha256(sha256(prevEntry).repeat(2))
     const newBalanceTableRoot = sha256(sha256(newEntry).repeat(2))
@@ -347,18 +348,18 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
   it("should verify signatures", () => {
     const inputSatoshis = 6000000
     const vote = 1
-    const sig1 = sign(num2bin(vote, 1), priv1.p, priv1.q, pub1)
-    const sig2 = sign(num2bin(vote, 1), priv2.p, priv2.q, pub2)
-    const sig1Hex = bigNum2bin(sig1.signature, 125)
-    const sig2Hex = bigNum2bin(sig2.signature, 125)
+    const sig1 = sign(int2Hex(vote, 1), priv1.p, priv1.q, pub1)
+    const sig2 = sign(int2Hex(vote, 1), priv2.p, priv2.q, pub2)
+    const sig1Hex = int2Hex(sig1.signature, rabinKeyLength)
+    const sig2Hex = int2Hex(sig2.signature, rabinKeyLength)
 
     const minerSigs = [
-      num2bin(0, 1),
+      int2Hex(0, 1),
       sig1Hex,
-      num2bin(sig1.paddingByteCount, 1),
-      num2bin(1, 1),
+      int2Hex(sig1.paddingByteCount, 1),
+      int2Hex(1, 1),
       sig2Hex,
-      num2bin(sig2.paddingByteCount, 1)
+      int2Hex(sig2.paddingByteCount, 1)
     ].join("")
 
     const newOpReturn = "01" + "01" + "00".repeat(35)
@@ -402,12 +403,12 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
   it("should verify partial signatures", () => {
     const inputSatoshis = 6000000
     const vote = 1
-    const sig1 = sign(num2bin(vote, 1), priv1.p, priv1.q, pub1)
-    const sig2 = sign(num2bin(vote, 1), priv2.p, priv2.q, pub2)
-    const sig1Hex = bigNum2bin(sig1.signature, 125)
-    const sig2Hex = bigNum2bin(sig2.signature, 125)
+    const sig1 = sign(int2Hex(vote, 1), priv1.p, priv1.q, pub1)
+    const sig2 = sign(int2Hex(vote, 1), priv2.p, priv2.q, pub2)
+    const sig1Hex = int2Hex(sig1.signature, rabinKeyLength)
+    const sig2Hex = int2Hex(sig2.signature, rabinKeyLength)
 
-    const minerSigs = [num2bin(1, 1), sig2Hex, num2bin(sig2.paddingByteCount, 1)].join("")
+    const minerSigs = [int2Hex(1, 1), sig2Hex, int2Hex(sig2.paddingByteCount, 1)].join("")
 
     const newOpReturn = "01" + "01" + "00".repeat(35)
     const newLockingScript = [lockingScriptCodePart, newOpReturn].join(" ")
@@ -450,12 +451,12 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
   it("should not verify insufficient signatures", () => {
     const inputSatoshis = 6000000
     const vote = 1
-    const sig1 = sign(num2bin(vote, 1), priv1.p, priv1.q, pub1)
-    const sig2 = sign(num2bin(vote, 1), priv2.p, priv2.q, pub2)
-    const sig1Hex = bigNum2bin(sig1.signature, 125)
-    const sig2Hex = bigNum2bin(sig2.signature, 125)
+    const sig1 = sign(int2Hex(vote, 1), priv1.p, priv1.q, pub1)
+    const sig2 = sign(int2Hex(vote, 1), priv2.p, priv2.q, pub2)
+    const sig1Hex = int2Hex(sig1.signature, rabinKeyLength)
+    const sig2Hex = int2Hex(sig2.signature, rabinKeyLength)
 
-    const minerSigs = [num2bin(0, 1), sig1Hex, num2bin(sig1.paddingByteCount, 1)].join("")
+    const minerSigs = [int2Hex(0, 1), sig1Hex, int2Hex(sig1.paddingByteCount, 1)].join("")
 
     const newOpReturn = "01" + "01" + "00".repeat(35)
     const newLockingScript = [lockingScriptCodePart, newOpReturn].join(" ")
@@ -498,18 +499,18 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
   it("should not verify signatures twice", () => {
     const inputSatoshis = 6000000
     const vote = 1
-    const sig1 = sign(num2bin(vote, 1), priv1.p, priv1.q, pub1)
-    const sig2 = sign(num2bin(vote, 1), priv2.p, priv2.q, pub2)
-    const sig1Hex = bigNum2bin(sig1.signature, 125)
-    const sig2Hex = bigNum2bin(sig2.signature, 125)
+    const sig1 = sign(int2Hex(vote, 1), priv1.p, priv1.q, pub1)
+    const sig2 = sign(int2Hex(vote, 1), priv2.p, priv2.q, pub2)
+    const sig1Hex = int2Hex(sig1.signature, rabinKeyLength)
+    const sig2Hex = int2Hex(sig2.signature, rabinKeyLength)
 
     const minerSigs = [
-      num2bin(0, 1),
+      int2Hex(0, 1),
       sig1Hex,
-      num2bin(sig1.paddingByteCount, 1),
-      num2bin(1, 1),
+      int2Hex(sig1.paddingByteCount, 1),
+      int2Hex(1, 1),
       sig2Hex,
-      num2bin(sig2.paddingByteCount, 1)
+      int2Hex(sig2.paddingByteCount, 1)
     ].join("")
 
     const newOpReturn = "01" + "01" + "00".repeat(35)
@@ -560,14 +561,14 @@ describe("Test sCrypt contract merkleToken In Javascript", () => {
     const globalSharesAgainst = 0
 
     const prevEntry = toHex(
-      pubKeyHex + num2bin(prevLiquidity, 1) + num2bin(prevSharesFor, 1) + num2bin(prevSharesAgainst, 1)
+      pubKeyHex + int2Hex(prevLiquidity, 1) + int2Hex(prevSharesFor, 1) + int2Hex(prevSharesAgainst, 1)
     )
-    const newEntry = toHex(num2bin(prevLiquidity, 1), num2bin(0, 1), num2bin(0, 1))
+    const newEntry = toHex(int2Hex(prevLiquidity, 1), int2Hex(0, 1), int2Hex(0, 1))
 
     const prevLeaf = sha256(prevEntry)
     const merklePath = prevLeaf + "01"
 
-    const sharesStatus = num2bin(globalLiquidity, 1) + num2bin(globalSharesFor, 1) + num2bin(globalSharesAgainst, 1)
+    const sharesStatus = int2Hex(globalLiquidity, 1) + int2Hex(globalSharesFor, 1) + int2Hex(globalSharesAgainst, 1)
 
     const prevBalanceTableRoot = sha256(sha256(prevEntry).repeat(2))
     const newBalanceTableRoot = sha256(sha256(newEntry).repeat(2))
