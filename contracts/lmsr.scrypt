@@ -3,7 +3,7 @@ import "./merkleTree.scrypt";
 /**
 * Scalingfactor of cost = 2^35
 */
-contract LMSR {
+library LMSR {
   static bytes lmsrTableRoot = b'd80a046b883acf825c7cf02a2af52d707ffa5d0042cf4c2d0298bebbe51da851';
 
   static function validate(int l, int n, int m, int cost, bytes merklePath) : bool {
