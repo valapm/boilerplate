@@ -2,15 +2,16 @@ contract FixMath {
 
   static int precision = 16;
   static int scale = 65536; // 2 ^ precision
+  static int scale2 = 1048576; // 2 ** (precision + 4); For better accuracy of log and log10
 
-  static int ln2 = 45426;
-  static int ln10 = 150902;
+  static int ln2 = 726817; // log(x) * scale2 / log2(x)
+  static int ln10 = 315653; // log10(x) * scale2 / log2(x)
 
   static function exp(int x) : int {
     int n = x;
 
     loop (16) {
-      n = n -(n *(FixMath.log(n) - x)) / FixMath.scale;
+      n = n - (n * (FixMath.log(n) - x)) / FixMath.scale;
     }
 
     return n;
@@ -21,7 +22,8 @@ contract FixMath {
   */
   static function log2(int x) : int {
     if (x > 6553600 || x < 66) {
-      exit(false); // loops arent sufficient;
+      // exit(false); // loops arent sufficient;
+      require(false);  // exit only returns 0
     }
 
     int b = 32768;
@@ -60,30 +62,31 @@ contract FixMath {
   }
 
   static function log(int x) : int {
-    return FixMath.log2(x) * FixMath.ln2 / FixMath.scale;
+    return FixMath.log2(x) * FixMath.ln2 / FixMath.scale2;
   }
 
   static function log10(int x) : int {
-    return FixMath.log2(x) * FixMath.ln10 / FixMath.scale;
+    return FixMath.log2(x) * FixMath.ln10 / FixMath.scale2;
   }
 
-  public function testLog2(int x) {
+  public function test(int x) {
     require(FixMath.log2(1 * 65536) == 0 * 65536);
-    require(FixMath.log2(32 * 65536) == 5 * 65536);
-    require(FixMath.log2(64 * 65536) == 6 * 65536);
-  }
 
-  // public function testLog(int x) {
-  //   require(FixMath.log(1 * 65536) == 0 * 65536);
-  //   require(FixMath.log(32 * 65536) == 5 * 65536);
-  //   require(FixMath.log(64 * 65536) == 6 * 65536);
-  // }
+    int log2test1 = FixMath.log2(32 * 65536);
+    require(log2test1 == 5 * 65536 || log2test1 == 5 * 65536 - 1);
+    int log2test2 = FixMath.log2(64 * 65536);
+    require(log2test2 == 6 * 65536 || log2test2 == 6 * 65536 - 1);
 
-  public function testLog10(int x) {
+    require(FixMath.log(1 * 65536) == 0 * 65536);
+
+    int logtest1 = FixMath.log(32 * 65536);
+    require(logtest1 == 227130 || logtest1 == 227130 - 1);
+    int logtest2 = FixMath.log(64 * 65536);
+    require(logtest2 == 272556 || logtest2 == 272556 - 1);
+
     require(FixMath.log10(1 * 65536) == 0 * 65536);
-    int test100 = FixMath.log10(100 * 65536);
-    // require(test100 <= 21 * 65536 / 10 && test100 > 19 * 65536 / 10);
-    require(test100 / 65536 == 2);
-    // require(FixMath.log10(1000 * 65536) == 3 * 65536);
+
+    int log10test1 = FixMath.log10(100 * 65536);
+    require(log10test1 == 2 * 65536 || log10test1 == 2 * 65536 - 1); // script always uses floor
   }
 }

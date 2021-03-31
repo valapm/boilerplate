@@ -8,6 +8,7 @@ contract PM {
 
   // TODO: Variable fee per trade for market creator
   // TODO: Flat fee per trade for myself
+  // TODO: Multiple event outcomes
 
   static int satScaling = 1048576;
   static int satScalingAdjust = 32768;
