@@ -19,6 +19,18 @@
       ]
     },
     {
+      "type": "scrypt",
+      "request": "launch",
+      "name": "Debug FixMath",
+      "program": "${workspaceFolder}/contracts/fixMath.scrypt",
+      "constructorArgs": [
+      ],
+      "pubFunc": "test",
+      "pubFuncArgs": [
+        10
+      ]
+    },
+    {
       "args": [
         "-r",
         "ts-node/register",
