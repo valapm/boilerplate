@@ -86,7 +86,7 @@
       "program": "${workspaceFolder}/contracts/fixMath.scrypt",
       "constructorArgs": [
       ],
-      "pubFunc": "test",
+      "pubFunc": "testExp",
       "pubFuncArgs": [
         10
       ]
