@@ -1,4 +1,10 @@
-contract FixMath {
+library FixMath {
+  /**
+  * Fixed Point implementations of log, log2, log10 and exp.
+  * Only works for positive numbers.
+  *
+  * Adapted from https://github.com/PetteriAimonen/libfixmath
+  */
 
   static int precision = 16;
   static int scale = 65536; // 2 ^ precision
@@ -7,15 +13,7 @@ contract FixMath {
   static int ln2 = 726817; // log(x) * scale2 / log2(x)
   static int ln10 = 315653; // log10(x) * scale2 / log2(x)
 
-  static function exp(int x) : int {
-    int n = x;
-
-    loop (16) {
-      n = n - (n * (FixMath.log(n) - x)) / FixMath.scale;
-    }
-
-    return n;
-  }
+  static int fixE = 178145; // e * scale
 
   /**
   * Works for numbers between 100 and 0.001
@@ -23,7 +21,7 @@ contract FixMath {
   static function log2(int x) : int {
     if (x > 6553600 || x < 66) {
       // exit(false); // loops arent sufficient;
-      require(false);  // exit only returns 0
+      require(false); // exit only returns 0
     }
 
     int b = 32768;
@@ -69,24 +67,38 @@ contract FixMath {
     return FixMath.log2(x) * FixMath.ln10 / FixMath.scale2;
   }
 
-  public function test(int x) {
-    require(FixMath.log2(1 * 65536) == 0 * 65536);
+  static function exp(int x) : int {
+    if (x >= 681391 || x <= -772243) require(false); // TODO: Appropriate limits?
 
-    int log2test1 = FixMath.log2(32 * 65536);
-    require(log2test1 == 5 * 65536 || log2test1 == 5 * 65536 - 1);
-    int log2test2 = FixMath.log2(64 * 65536);
-    require(log2test2 == 6 * 65536 || log2test2 == 6 * 65536 - 1);
+    int result = 0;
 
-    require(FixMath.log(1 * 65536) == 0 * 65536);
+    if (x == 0) {
+      result = scale;
+    }
+    else if (x == scale) {
+      result = fixE;
+    } else {
+      result = x + scale;
+      int term = x;
+      int i = 2;
+      bool break = false;
 
-    int logtest1 = FixMath.log(32 * 65536);
-    require(logtest1 == 227130 || logtest1 == 227130 - 1);
-    int logtest2 = FixMath.log(64 * 65536);
-    require(logtest2 == 272556 || logtest2 == 272556 - 1);
+      loop (29) {
+        // TODO: Repititions should be relative to precision
+        if (! break) {
+          term = (term * x) / (i * scale);
+          result += term;
 
-    require(FixMath.log10(1 * 65536) == 0 * 65536);
+          if (term < 500 && (i > 15 || term < 20)) {
+            break = true;
+          }
 
-    int log10test1 = FixMath.log10(100 * 65536);
-    require(log10test1 == 2 * 65536 || log10test1 == 2 * 65536 - 1); // script always uses floor
+          i++;
+        }
+      }
+
+    }
+
+    return result;
   }
 }
