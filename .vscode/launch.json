@@ -31,6 +31,18 @@
       ]
     },
     {
+      "type": "scrypt",
+      "request": "launch",
+      "name": "Debug FixLmsr",
+      "program": "${workspaceFolder}/contracts/fixLmsr.scrypt",
+      "constructorArgs": [
+      ],
+      "pubFunc": "test",
+      "pubFuncArgs": [
+        10
+      ]
+    },
+    {
       "args": [
         "-r",
         "ts-node/register",
