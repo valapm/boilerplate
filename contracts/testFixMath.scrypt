@@ -1,0 +1,29 @@
+import "./fixMath.scrypt";
+
+contract TestFixMath {
+  public function testLog(int x) {
+    require(FixMath.log2(1 * 65536) == 0 * 65536);
+
+    int log2test1 = FixMath.log2(32 * 65536);
+    require(log2test1 == 5 * 65536 || log2test1 == 5 * 65536 - 1);
+    int log2test2 = FixMath.log2(64 * 65536);
+    require(log2test2 == 6 * 65536 || log2test2 == 6 * 65536 - 1);
+
+    require(FixMath.log(1 * 65536) == 0 * 65536);
+
+    int logtest1 = FixMath.log(32 * 65536);
+    require(logtest1 == 227130 || logtest1 == 227130 - 1);
+    int logtest2 = FixMath.log(64 * 65536);
+    require(logtest2 == 272556 || logtest2 == 272556 - 1);
+
+    require(FixMath.log10(1 * 65536) == 0 * 65536);
+
+    int log10test1 = FixMath.log10(100 * 65536);
+    require(log10test1 == 2 * 65536 || log10test1 == 2 * 65536 - 1); // script always uses floor
+  }
+
+  public function testExp(int x) {
+    int exptest1 = FixMath.exp(10 * 65536);
+    require(exptest1 / 65536 == 22026);
+  }
+}

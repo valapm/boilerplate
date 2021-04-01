@@ -7,14 +7,14 @@ describe("Test sCrypt contract fixMath In Javascript", () => {
   let result, fixMath
 
   before(() => {
-    const FixMath = buildContractClass(compileContract("fixMath.scrypt"))
+    const FixMath = buildContractClass(compileContract("testFixMath.scrypt"))
     fixMath = new FixMath()
   })
 
   it("should return true", () => {
-    result = fixMath.test().verify()
+    result = fixMath.testLog(1).verify()
     expect(result.success, result.error).to.be.true
-    // result = fixMath.testLog10(1).verify()
-    // expect(result.success, result.error).to.be.true
+    result = fixMath.testExp(1).verify()
+    expect(result.success, result.error).to.be.true
   })
 })
