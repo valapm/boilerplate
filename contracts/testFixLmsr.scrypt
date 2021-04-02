@@ -4,10 +4,9 @@ contract TestFixLMSR {
 
   public function test(int i) {
     // TODO: Test limits
-    int[10] options = [1 * 65536, 2 * 65536, 3 * 65536, 0, 0, 0, 0, 0, 0, 0];
-    int liquidity = 3 * 65536;
-    int optionCount = 3;
-    int testLmsr1 = FixLMSR.lmsr(options, optionCount, liquidity);
+    bytes options = b'010203';
+    int liquidity = 3;
+    int testLmsr1 = FixLMSR.lmsr(options, liquidity);
     require(testLmsr1 / 4 == 29523); // Ensure accuracy up to 2^14
   }
 
