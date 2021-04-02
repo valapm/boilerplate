@@ -68,7 +68,7 @@ library FixMath {
   }
 
   static function exp(int x) : int {
-    if (x >= 681391 || x <= -772243) require(false); // TODO: Appropriate limits?
+    if (x >= 681391 || x < 0) require(false); // TODO: Appropriate limits?
 
     int result = 0;
 
@@ -83,7 +83,7 @@ library FixMath {
       int i = 2;
       bool break = false;
 
-      loop (29) {
+      loop (28) {
         // TODO: Repititions should be relative to precision
         if (! break) {
           term = (term * x) / (i * scale);
