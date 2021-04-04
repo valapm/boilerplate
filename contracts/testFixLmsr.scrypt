@@ -8,6 +8,10 @@ contract TestFixLMSR {
     int liquidity = 3;
     int testLmsr1 = FixLMSR.lmsr(options, liquidity);
     require(testLmsr1 / 4 == 29523); // Ensure accuracy up to 2^14
+
+    liquidity = 0;
+    int testLmsr2 = FixLMSR.lmsr(options, liquidity);
+    require(testLmsr2 == 196608); // Ensure accuracy up to 2^14
   }
 
 }
