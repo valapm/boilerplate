@@ -9,27 +9,45 @@ library FixLMSR {
   // static const int MaxOptionCount = 10;
 
   static function lmsr(bytes options, int liquidity) : int {
-
     const int MaxOptionLength = 10;
+    int optionCount = len(options);
+
+    int result = 0;
     int i = 0;
     int x = 0;
-    int optionCount = len(options);
-    loop (MaxOptionLength) {
-      if (i < optionCount) {
-        x = x + FixMath.exp(unpack(options[i : i + 1]) * 65536 / liquidity);
-        i++;
+    if (liquidity == 0) {
+      // Cover case where liquidity is 0
+      loop (MaxOptionLength) {
+        if (i < optionCount) {
+          x = unpack(options[i : i + 1]);
+          if (x > result) result = x;
+          i++;
+        }
       }
+
+      result = result * 65536;
+    } else {
+      loop (MaxOptionLength) {
+        if (i < optionCount) {
+          x = x + FixMath.exp(unpack(options[i : i + 1]) * 65536 / liquidity);
+          i++;
+        }
+      }
+
+      result = FixMath.log(x);
     }
 
-    return FixMath.log(x);
+    return result;
   }
 
   // public function test(int i) {
-  //   // bytes options = num2bin(1 * 65536, 3) + num2bin(2 * 65536, 3) + num2bin(3 * 65536, 3);
   //   bytes options = b'010203';
   //   int liquidity = 3;
-  //   // int optionCount = 3;
   //   int testLmsr1 = FixLMSR.lmsr(options, liquidity);
   //   require(testLmsr1 / 4 == 29523); // Ensure accuracy up to 2^14
+
+  //   liquidity = 0;
+  //   int testLmsr2 = FixLMSR.lmsr(options, liquidity);
+  //   require(testLmsr2 == 196608); // Ensure accuracy up to 2^14
   // }
 }
