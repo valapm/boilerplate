@@ -6,10 +6,9 @@ import "./fixMath.scrypt";
 * Max option count is 10.
 */
 library FixLMSR {
-  // static const int MaxOptionCount = 10;
+  static const int MaxOptionLength = 6;
 
   static function lmsr(bytes options, int liquidity) : int {
-    const int MaxOptionLength = 10;
     int optionCount = len(options);
 
     int result = 0;
