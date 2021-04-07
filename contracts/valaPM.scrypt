@@ -3,25 +3,25 @@ import "./fixLmsr.scrypt";
 import "./merkleTree.scrypt";
 import "./rabin.scrypt";
 
-// TODO: Variable fee per trade for market creator
-// TODO: Flat fee per trade for myself
-// TODO: Flat fee per trade for oracle
-
-// TODO: Add market creator pubKey to opReturn data
-// TODO: Market creator can sell all invalid shares when market is resolved, add to updateEntry
-
 contract PM {
   bytes oracleKeys;
   int globalOptionCount;
   int requiredVotes;
+  PubKey creatorPubKey;
+  Ripemd160 creatorPayoutAddress;
+  int creatorFee;
+
+  static const Ripemd160 developerAddress = Ripemd160(b'00ae2c80a6e4bd7a01a0c8e6679f888234efac02b6');
+  static const int developerFee = 65536; // 1% * 65536
 
   static const int MaxOptionCount = 6; // Maximum number of outcomes
   static const int MaxOracleCount = 3; // Maximum number of oracles for resolving the market
 
   static const int satScaling = 1048576; // 2^20
   static const int fixMathScaling = 65536; // 2^16
-  static const int satScalingAdjust = 16; // satStacling - fixMathScaling =) 2^4
+  static const int satScalingAdjust = 16; // satStacling - fixMathScaling = 2^4
 
+  static const int pubKeyLength = 32;
   static const int balanceTableLength = 32;
 
   static const int entryLiqudityPos = 32;
@@ -39,6 +39,8 @@ contract PM {
   public function updateMarket(
     SigHashPreimage txPreimage,
     int action, // 0 = add entry; 1 = update entry
+    Ripemd160 payoutAddress, // Payout address for change and sold/redeemed shares
+    int changeSats,
 
     bytes entry,
 
@@ -54,7 +56,7 @@ contract PM {
     ) {
 
     // OP_PUSHTX with AnyoneCanPay and Sighash Single
-    SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
+    SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.ALL | SigHash.FORKID;
     require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
 
     // Entract entry paramerters
@@ -127,6 +129,7 @@ contract PM {
       int liquidityChange = newLiquidity - prevLiquidity;
       newGlobalLiquidity = prevGlobalLiquidity + liquidityChange;
 
+      bool redeemInvalid = false;
       int i = 0;
       loop (MaxOptionCount) {
         if (i < this.globalOptionCount) {
@@ -138,6 +141,7 @@ contract PM {
 
           if (isDecided == 1) {
             if (i == decision) {
+              if (publicKey == this.creatorPubKey) redeemInvalid = true; // Market creator can sell all invalid shares when market is resolved
               if (shareChange != 0) require(liquidityChange == 0); // For complexity reasons disallow redeeming and changing liquidity at the same time.
               redeemShares = shareChange;
             } else {
@@ -145,7 +149,11 @@ contract PM {
             }
           }
 
-          int newShares = unpack(prevGlobalShareStatus[i : i + 1]) + shareChange;
+          int newShares = 0;
+          if (! redeemInvalid) {
+            newShares = unpack(prevGlobalShareStatus[i : i + 1]) + shareChange;
+          }
+
           newGlobalShareStatus += num2bin(newShares, 1);
         }
       }
@@ -172,24 +180,45 @@ contract PM {
     }
 
     // Determine new contract sat balance
+    int prevSatBalance = Util.value(txPreimage);
     int newBalance = 0;
+    int redeemSats = 0;
     if (redeemShares != 0) {
       // User only sold winning shares
-      int redeemSats = redeemShares * PM.satScalingAdjust;
-      int newBalance = Util.value(txPreimage) - redeemSats;
+      redeemSats = redeemShares * PM.satScalingAdjust;
+      int newBalance = prevSatBalance - redeemSats;
     } else {
       // Market is either unresolved or user only changed liquidity
       int newLmsrBalance = FixLMSR.lmsr(newGlobalShareStatus, newGlobalLiquidity);
       int newBalance = newLmsrBalance * PM.satScalingAdjust; // Need to be 2^20 * lmsr output
+      redeemSats = prevSatBalance - newBalance;
     }
 
     bytes newScriptCode = scriptCode[ : sharePos] + newGlobalShareStatus + newBalanceTableRoot;
-
-    int prevBalance = Util.value(txPreimage);
-
     bytes marketOutput = Util.buildOutput(newScriptCode, newBalance);
+    bytes payoutScript = Util.buildPublicKeyHashScript(payoutAddress);
 
-    require(hash256(marketOutput) == Util.hashOutputs(txPreimage));
+    bytes outputHash = b'';
+    if (redeemSats > 0) {
+      // User gets payed out and has to pay fees to developer and creator
+      int developerSatFee = developerFee * redeemSats / 65536;
+      int creatorSatFee = this.creatorFee * redeemSats / 65536;
+      int payoutSats = redeemSats - developerSatFee - creatorSatFee + changeSats;
+
+      bytes developerOutputScript = Util.buildPublicKeyHashScript(developerAddress);
+      bytes creatorOutputScript = Util.buildPublicKeyHashScript(this.creatorPayoutAddress);
+      bytes developerOutput = Util.buildOutput(developerOutputScript, developerSatFee);
+      bytes creatorOutput = Util.buildOutput(creatorOutputScript, creatorSatFee);
+      bytes payoutOutput = Util.buildOutput(payoutScript, payoutSats);
+
+      outputHash = hash256(marketOutput + payoutOutput + developerOutput + creatorOutput);
+    } else {
+      bytes changeOutput = Util.buildOutput(payoutScript, changeSats);
+
+      outputHash = hash256(marketOutput + changeOutput);
+    }
+
+    require(outputHash == Util.hashOutputs(txPreimage));
   }
 
   public function decide(SigHashPreimage txPreimage,
@@ -252,6 +281,8 @@ contract PM {
     require(hash256(marketOutput) == Util.hashOutputs(txPreimage));
   }
 }
+
+
 
 
 
