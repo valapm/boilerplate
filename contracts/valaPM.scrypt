@@ -21,19 +21,18 @@ contract PM {
   static const int fixMathScaling = 65536; // 2^16
   static const int satScalingAdjust = 16; // satStacling - fixMathScaling = 2^4
 
-  static const int pubKeyLength = 32;
-  static const int balanceTableLength = 32;
+  // static const int pubKeyLength = 32;
+  static const int balanceTableByteLength = 32;
 
   static const int entryLiqudityPos = 32;
   static const int entrySharePos = 33;
 
   // Oracles
-  static const int rabinSigN = 0;
-  static const int rabinKeyLength = 126;
-  static const int oracleLength = 127; // rabin key + 1 byte
-  static const int signatureLength = 128; // rabin key + 2 bytes
-  static const int oracleStateLength = 2;
-  static const int voteCountLen = 2; // 2 bytes integer
+  static const int rabinKeyByteLength = 126;
+  static const int oracleInfoByteLength = 127; // rabin key + 1 byte
+  // static const int signatureByteLength = 128; // rabin key + 2 bytes
+  static const int oracleStateByteLength = 2;
+  static const int voteCountByteLen = 2; // 2 bytes integer
 
   // Hash of oracleCommitment.txt in the library.
   static const bytes commitmentHash = b'0E47D25DE560350A3717647DD69C4B5E190A46484589A20435CE79CE002E07DB';
@@ -45,6 +44,7 @@ contract PM {
   *
   * OP_RETURN
   * identifier
+  * MarketDetail JSON
   * DecisionState(decided(1) + decision(1))
   * OracleState[(committed(1) + voted(1))]
   * VoteState[(votes(2))]
@@ -54,7 +54,7 @@ contract PM {
   */
   public function updateMarket(
     SigHashPreimage txPreimage,
-    int action, // 0 = add entry; 1 = update entry; 2 = oracle commit; 3 = oracle vote
+    int action, // 1 = add entry; 2 = update entry; 3 = oracle commit; 4 = oracle vote
 
     // Required for adding or modifying entry
     Ripemd160 payoutAddress, // Payout address for change and sold/redeemed shares
@@ -67,7 +67,7 @@ contract PM {
 
     // Inputs required for modifying entry
     int prevLiquidity,
-    bytes prevShares,
+    bytes prevEntrySharesHex,
     Sig signature,
     bytes merklePath,
 
@@ -83,10 +83,10 @@ contract PM {
     // Extract current state parameters
     bytes scriptCode = Util.scriptCode(txPreimage);
     int scriptLen = len(scriptCode);
-    int oracleCount = len(this.oracleKeys) / oracleLength;
+    int oracleCount = len(this.oracleKeys) / oracleInfoByteLength;
 
     // Balance table merkleroot
-    int balanceTableRootPos = scriptLen - balanceTableLength;
+    int balanceTableRootPos = scriptLen - balanceTableByteLength;
     bytes prevBalanceTableRoot = scriptCode[balanceTableRootPos : ];
 
     // Global share status
@@ -95,15 +95,15 @@ contract PM {
 
     // Global liquidity
     int globalLiquidityPos = globalShareStatusPos - 1;
-    int prevGlobalLiquidity = unpack(scriptCode[globalLiquidityPos - 1 : globalShareStatusPos]);
+    int prevGlobalLiquidity = unpack(scriptCode[globalLiquidityPos : globalShareStatusPos]);
 
     // Global votes
-    int globalVotesLength = this.globalOptionCount * voteCountLen;
+    int globalVotesLength = this.globalOptionCount * voteCountByteLen;
     int globalVotesPos = globalLiquidityPos - globalVotesLength;
     bytes prevGlobalVotes = scriptCode[globalVotesPos : globalLiquidityPos];
 
     // Oracle states
-    int oracleStatesLen = oracleCount * oracleStateLength;
+    int oracleStatesLen = oracleCount * oracleStateByteLength;
     int oracleStatesPos = globalVotesPos - oracleStatesLen;
     bytes prevGlobalOracleStates = scriptCode[oracleStatesPos : globalVotesPos];
 
@@ -122,12 +122,12 @@ contract PM {
       // Extract entry paramerters
       PubKey publicKey = PubKey(entry[ : entryLiqudityPos]);
       int newLiquidity = unpack(entry[entryLiqudityPos : entrySharePos ]);
-      bytes newShares = entry[entrySharePos : ];
+      bytes newEntrySharesHex = entry[entrySharePos : ];
 
       require(newLiquidity >= 0);
 
       // Verify that right amount of shares are passed. TODO: Might be unnecessary
-      int shareCount = len(newShares);
+      int shareCount = len(newEntrySharesHex);
       require(shareCount == this.globalOptionCount);
 
       int newGlobalLiquidity = 0;
@@ -144,18 +144,18 @@ contract PM {
         int i = 0;
         loop (MaxOptionCount) {
           if (i < this.globalOptionCount) {
-            int entryShares = unpack(newShares[i : i + 1]);
+            int entryShares = unpack(newEntrySharesHex[i : i + 1]);
             require(entryShares >= 0);
 
-            int newShares = unpack(prevGlobalShareStatus[i : i + 1]) + entryShares;
-            newGlobalShareStatus += num2bin(newShares, 1);
+            int newGlobalShares = unpack(prevGlobalShareStatus[i : i + 1]) + entryShares;
+            newGlobalShareStatus += num2bin(newGlobalShares, 1);
           }
         }
 
         bytes newLeaf = sha256(
           publicKey
           + num2bin(newLiquidity, 1)
-          + newShares
+          + newEntrySharesHex
           );
 
         bytes newBalanceTableRoot = MerkleTree.addLeafSafe(lastEntry,
@@ -166,51 +166,52 @@ contract PM {
       }
       else if (action == 1) {
         // Update Entry
+        // TODO: Should market creator extract all liquidity as well?
 
         require(checkSig(signature, publicKey));
 
         int liquidityChange = newLiquidity - prevLiquidity;
         newGlobalLiquidity = prevGlobalLiquidity + liquidityChange;
 
-        bool redeemInvalid = false;
+        bool redeemInvalid = publicKey == this.creatorPubKey; // Market creator can sell all invalid shares when market is resolved
+
         int i = 0;
         loop (MaxOptionCount) {
           if (i < this.globalOptionCount) {
-            int entryShares = unpack(newShares[i : i + 1]);
+
+            int entryShares = unpack(newEntrySharesHex[i : i + 1]);
             require(entryShares >= 0); // Might be unnecessary
 
-            int prevShares = unpack(prevShares[i : i + 1]);
+            int prevShares = unpack(prevEntrySharesHex[i : i + 1]);
             int shareChange = entryShares - prevShares;
+
+            int prevGlobalShares = unpack(prevGlobalShareStatus[i : i + 1]);
+            int newGlobalShares = prevGlobalShares + shareChange;
 
             if (prevGlobalDecided == 1) {
               if (i == prevGlobalDecision) {
-                if (publicKey == this.creatorPubKey) redeemInvalid = true; // Market creator can sell all invalid shares when market is resolved
                 if (shareChange != 0) require(liquidityChange == 0); // For complexity reasons disallow redeeming and changing liquidity at the same time.
                 redeemShares = shareChange;
               } else {
                 require(shareChange == 0); // Prevent selling of loosing shares after market is resolved
+                if (redeemInvalid) newGlobalShares = 0;
               }
             }
 
-            int newShares = 0;
-            if (! redeemInvalid) {
-              newShares = unpack(prevGlobalShareStatus[i : i + 1]) + shareChange;
-            }
-
-            newGlobalShareStatus += num2bin(newShares, 1);
+            newGlobalShareStatus += num2bin(newGlobalShares, 1);
           }
         }
 
         bytes oldLeaf = sha256(
           publicKey
           + num2bin(prevLiquidity, 1)
-          + prevShares
+          + prevEntrySharesHex
           );
 
         bytes newLeaf = sha256(
           publicKey
           + num2bin(newLiquidity, 1)
-          + newShares
+          + newEntrySharesHex
           );
 
         newBalanceTableRoot = MerkleTree.updateLeaf(oldLeaf,
@@ -267,9 +268,9 @@ contract PM {
       SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
       require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
 
-      int oracleKeyPos = oraclePos * oracleLength;
-      int oraclePubKey = unpack(this.oracleKeys[oracleKeyPos : oracleKeyPos + rabinKeyLength]);
-      int oracleVotes = unpack(this.oracleKeys[oracleKeyPos + rabinKeyLength : oracleKeyPos + oracleLength]);
+      int oracleKeyPos = oraclePos * oracleInfoByteLength;
+      int oraclePubKey = unpack(this.oracleKeys[oracleKeyPos : oracleKeyPos + rabinKeyByteLength]);
+      int oracleVotes = unpack(this.oracleKeys[oracleKeyPos + rabinKeyByteLength : oracleKeyPos + oracleInfoByteLength]);
       bytes padding = num2bin(0, paddingCount);
       RabinSignature rabin = new RabinSignature();
 
@@ -290,8 +291,8 @@ contract PM {
       }
       require(rabin.verifySig(oracleSig, sigContent, padding, oraclePubKey));
 
-      int oracleStatePos = oracleStateLength * oraclePos;
-      bytes prevOracleState = prevGlobalOracleStates[oracleStatePos : oracleStatePos + oracleStateLength];
+      int oracleStatePos = oracleStateByteLength * oraclePos;
+      bytes prevOracleState = prevGlobalOracleStates[oracleStatePos : oracleStatePos + oracleStateByteLength];
 
       bytes newOracleState = prevOracleState;
       bytes newDecisionState = prevGlobalDecisionState;
@@ -308,10 +309,10 @@ contract PM {
         require(prevGlobalDecision >= 0 && prevGlobalDecision < this.globalOptionCount);
 
         // Add oracles votes
-        int voteSharePos = voteCountLen * prevGlobalDecision;
-        int prevVotes = unpack(prevGlobalVotes[voteSharePos : voteSharePos + voteCountLen]);
+        int voteSharePos = voteCountByteLen * prevGlobalDecision;
+        int prevVotes = unpack(prevGlobalVotes[voteSharePos : voteSharePos + voteCountByteLen]);
         int newShareVotes = prevVotes + oracleVotes;
-        newGlobalVotes = prevGlobalVotes[ : voteSharePos ] + num2bin(newShareVotes, voteCountLen) + prevGlobalVotes[voteSharePos + voteCountLen : ];
+        newGlobalVotes = prevGlobalVotes[ : voteSharePos ] + num2bin(newShareVotes, voteCountByteLen) + prevGlobalVotes[voteSharePos + voteCountByteLen : ];
 
         // If outcome has enough votes resolve market
         if (newShareVotes >= this.requiredVotes) {
@@ -319,7 +320,7 @@ contract PM {
         }
       }
 
-      bytes newGlobalOracleStates = prevGlobalOracleStates[ : oracleStatePos] + newOracleState + prevGlobalOracleStates[oracleStatePos + oracleStateLength : ];
+      bytes newGlobalOracleStates = prevGlobalOracleStates[ : oracleStatePos] + newOracleState + prevGlobalOracleStates[oracleStatePos + oracleStateByteLength : ];
 
       bytes newScriptCode = scriptCode[ : gobalDecisionPos] + newDecisionState + newGlobalOracleStates + newGlobalVotes + scriptCode[globalLiquidityPos : ];
       bytes marketOutput = Util.buildOutput(newScriptCode, Util.value(txPreimage));
