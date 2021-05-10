@@ -11,7 +11,7 @@ contract PM {
   Ripemd160 creatorPayoutAddress;
   int creatorFee;
 
-  static const Ripemd160 developerAddress = Ripemd160(b'00ae2c80a6e4bd7a01a0c8e6679f888234efac02b6');
+  static const Ripemd160 developerAddress = Ripemd160(b'ae2c80a6e4bd7a01a0c8e6679f888234efac02b6');
   static const int developerFee = 65536; // 1% * 65536
 
   static const int MaxOptionCount = 6; // Maximum number of outcomes
@@ -24,8 +24,8 @@ contract PM {
   // static const int pubKeyLength = 32;
   static const int balanceTableByteLength = 32;
 
-  static const int entryLiqudityPos = 32;
-  static const int entrySharePos = 33;
+  static const int entryLiqudityPos = 33;
+  static const int entrySharePos = 34;
 
   // Oracles
   static const int rabinKeyByteLength = 126;
@@ -73,7 +73,7 @@ contract PM {
 
     // Inputs required for oracle commit or vote
     int oraclePos,
-    int oracleSig,
+    int oracleSig, // TODO: Use Bytes instead?
     int paddingCount,
 
     // Inputs required for oracle vote
@@ -136,7 +136,7 @@ contract PM {
 
       int redeemShares = 0; // Only relevant for redeeming shares
 
-      if (action == 0) {
+      if (action == 1) {
         // Add new entry
 
         newGlobalLiquidity = prevGlobalLiquidity + newLiquidity;
@@ -149,6 +149,8 @@ contract PM {
 
             int newGlobalShares = unpack(prevGlobalShareStatus[i : i + 1]) + entryShares;
             newGlobalShareStatus += num2bin(newGlobalShares, 1);
+
+            i += 1;
           }
         }
 
@@ -158,13 +160,13 @@ contract PM {
           + newEntrySharesHex
           );
 
-        bytes newBalanceTableRoot = MerkleTree.addLeafSafe(lastEntry,
+        newBalanceTableRoot = MerkleTree.addLeafSafe(lastEntry,
           lastMerklePath,
           prevBalanceTableRoot,
           newLeaf);
 
       }
-      else if (action == 1) {
+      else if (action == 2) {
         // Update Entry
         // TODO: Should market creator extract all liquidity as well?
 
@@ -228,11 +230,11 @@ contract PM {
       if (redeemShares != 0) {
         // User only sold winning shares
         redeemSats = redeemShares * PM.satScalingAdjust;
-        int newBalance = prevSatBalance - redeemSats;
+        newBalance = prevSatBalance - redeemSats;
       } else {
         // Market is either unresolved or user only changed liquidity
         int newLmsrBalance = FixLMSR.lmsr(newGlobalShareStatus, newGlobalLiquidity);
-        int newBalance = newLmsrBalance * PM.satScalingAdjust; // Need to be 2^20 * lmsr output
+        newBalance = newLmsrBalance * PM.satScalingAdjust; // Need to be 2^20 * lmsr output
         redeemSats = prevSatBalance - newBalance;
       }
 
@@ -240,7 +242,6 @@ contract PM {
       bytes marketOutput = Util.buildOutput(newScriptCode, newBalance);
       bytes payoutScript = Util.buildPublicKeyHashScript(payoutAddress);
 
-      bytes outputHash = b'';
       if (redeemSats > 0) {
         // User gets payed out and has to pay fees to developer and creator
         int developerSatFee = developerFee * redeemSats / 65536;
