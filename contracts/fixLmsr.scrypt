@@ -36,7 +36,7 @@ library FixLMSR {
       result = FixMath.log(x);
     }
 
-    return result;
+    return liquidity * result;
   }
 
   // public function test(int i) {
