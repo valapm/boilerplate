@@ -44,7 +44,9 @@ contract PM {
   *
   * OP_RETURN
   * identifier
+  *
   * MarketDetail JSON
+  *
   * DecisionState(decided(1) + decision(1))
   * OracleState[(committed(1) + voted(1))]
   * VoteState[(votes(2))]
@@ -201,6 +203,7 @@ contract PM {
             }
 
             newGlobalShareStatus += num2bin(newGlobalShares, 1);
+            i += 1;
           }
         }
 
@@ -238,7 +241,7 @@ contract PM {
         redeemSats = prevSatBalance - newBalance;
       }
 
-      bytes newScriptCode = scriptCode[ : globalShareStatusPos] + newGlobalShareStatus + newBalanceTableRoot;
+      bytes newScriptCode = scriptCode[ : globalLiquidityPos] + num2bin(newGlobalLiquidity, 1) + newGlobalShareStatus + newBalanceTableRoot;
       bytes marketOutput = Util.buildOutput(newScriptCode, newBalance);
       bytes payoutScript = Util.buildPublicKeyHashScript(payoutAddress);
 
