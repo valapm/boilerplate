@@ -313,17 +313,17 @@ contract PM {
         newOracleState = b'0101'; // committed + voted
 
         // Make shure decision is in range
-        require(prevGlobalDecision >= 0 && prevGlobalDecision < this.globalOptionCount);
+        require(oracleDecision >= 0 && oracleDecision < this.globalOptionCount);
 
         // Add oracles votes
-        int voteSharePos = voteCountByteLen * prevGlobalDecision;
+        int voteSharePos = voteCountByteLen * oracleDecision;
         int prevVotes = unpack(prevGlobalVotes[voteSharePos : voteSharePos + voteCountByteLen]);
         int newShareVotes = prevVotes + oracleVotes;
         newGlobalVotes = prevGlobalVotes[ : voteSharePos ] + num2bin(newShareVotes, voteCountByteLen) + prevGlobalVotes[voteSharePos + voteCountByteLen : ];
 
         // If outcome has enough votes resolve market
         if (newShareVotes >= this.requiredVotes) {
-          newDecisionState = b'01' + num2bin(prevGlobalDecision, 1);
+          newDecisionState = b'01' + num2bin(oracleDecision, 1);
         }
       }
 
