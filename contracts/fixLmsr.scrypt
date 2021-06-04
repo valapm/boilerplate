@@ -33,10 +33,10 @@ library FixLMSR {
         }
       }
 
-      result = FixMath.log(x);
+      result = liquidity * FixMath.log(x);
     }
 
-    return liquidity * result;
+    return result;
   }
 
   // public function test(int i) {
