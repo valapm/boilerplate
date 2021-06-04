@@ -11,8 +11,10 @@ contract PM {
   Ripemd160 creatorPayoutAddress;
   int creatorFee;
 
+  static const int dustLimit = 546;
+
   static const Ripemd160 developerAddress = Ripemd160(b'ae2c80a6e4bd7a01a0c8e6679f888234efac02b6');
-  static const int developerFee = 65536; // 1% * 65536
+  static const int developerFee = 1; // 1% * 65536
 
   static const int MaxOptionCount = 6; // Maximum number of outcomes
   static const int MaxOracleCount = 3; // Maximum number of oracles for resolving the market
@@ -241,26 +243,27 @@ contract PM {
         redeemSats = prevSatBalance - newBalance;
       }
 
+      if (newBalance < dustLimit) {
+        newBalance = dustLimit; // TODO: Can be lowered and eventually removed.
+      }
+
       bytes newScriptCode = scriptCode[ : globalLiquidityPos] + num2bin(newGlobalLiquidity, 1) + newGlobalShareStatus + newBalanceTableRoot;
       bytes marketOutput = Util.buildOutput(newScriptCode, newBalance);
       bytes payoutScript = Util.buildPublicKeyHashScript(payoutAddress);
+      bytes changeOutput = Util.buildOutput(payoutScript, changeSats);
 
       if (redeemSats > 0) {
         // User gets payed out and has to pay fees to developer and creator
-        int developerSatFee = developerFee * redeemSats / 65536;
-        int creatorSatFee = this.creatorFee * redeemSats / 65536;
-        int payoutSats = redeemSats - developerSatFee - creatorSatFee + changeSats;
+        int developerSatFee = developerFee * redeemSats / 100;
+        int creatorSatFee = this.creatorFee * redeemSats / 100;
 
         bytes developerOutputScript = Util.buildPublicKeyHashScript(developerAddress);
         bytes creatorOutputScript = Util.buildPublicKeyHashScript(this.creatorPayoutAddress);
         bytes developerOutput = Util.buildOutput(developerOutputScript, developerSatFee);
         bytes creatorOutput = Util.buildOutput(creatorOutputScript, creatorSatFee);
-        bytes payoutOutput = Util.buildOutput(payoutScript, payoutSats);
 
-        outputHash = hash256(marketOutput + payoutOutput + developerOutput + creatorOutput);
+        outputHash = hash256(marketOutput + developerOutput + creatorOutput + changeOutput);
       } else {
-        bytes changeOutput = Util.buildOutput(payoutScript, changeSats);
-
         outputHash = hash256(marketOutput + changeOutput);
       }
 
