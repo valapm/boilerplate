@@ -179,7 +179,12 @@ contract PM {
         int liquidityChange = newLiquidity - prevLiquidity;
         newGlobalLiquidity = prevGlobalLiquidity + liquidityChange;
 
-        bool redeemInvalid = publicKey == this.creatorPubKey; // Market creator can sell all invalid shares when market is resolved
+        // Market creator can sell all invalid shares when market is resolved
+        bool redeemInvalid = false;
+        if (prevGlobalDecided == 1 && publicKey == this.creatorPubKey) {
+          // Check that winning shares aren't redeemed at the same time
+          redeemInvalid = prevEntrySharesHex == newEntrySharesHex;
+        }
 
         int i = 0;
         loop (MaxOptionCount) {
@@ -197,7 +202,7 @@ contract PM {
             if (prevGlobalDecided == 1) {
               if (i == prevGlobalDecision) {
                 if (shareChange != 0) require(liquidityChange == 0); // For complexity reasons disallow redeeming and changing liquidity at the same time.
-                redeemShares = shareChange;
+                redeemShares = -shareChange;
               } else {
                 require(shareChange == 0); // Prevent selling of loosing shares after market is resolved
                 if (redeemInvalid) newGlobalShares = 0;
@@ -234,7 +239,7 @@ contract PM {
       int redeemSats = 0;
       if (redeemShares != 0) {
         // User only sold winning shares
-        redeemSats = redeemShares * PM.satScalingAdjust;
+        redeemSats = redeemShares * PM.satScaling;
         newBalance = prevSatBalance - redeemSats;
       } else {
         // Market is either unresolved or user only changed liquidity
