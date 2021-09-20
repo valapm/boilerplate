@@ -10,6 +10,7 @@ contract PM {
   PubKey creatorPubKey;
   Ripemd160 creatorPayoutAddress;
   int creatorFee;
+  int liquidityFeeRate; // Trade fees in percent payed to liquidity providers
 
   static const int dustLimit = 546;
 
@@ -36,6 +37,9 @@ contract PM {
   static const int oracleStateByteLength = 2;
   static const int voteCountByteLen = 2; // 2 bytes integer
 
+  static const int liquidityFeePoolByteLen = 5;
+  static const int liquidityPointsByteLen = 8;
+
   // Hash of oracleCommitment.txt in the library.
   static const bytes commitmentHash = b'0E47D25DE560350A3717647DD69C4B5E190A46484589A20435CE79CE002E07DB';
 
@@ -52,6 +56,9 @@ contract PM {
   * DecisionState(decided(1) + decision(1))
   * OracleState[(committed(1) + voted(1))]
   * VoteState[(votes(2))]
+  * LiquidityFeePool (5)
+  * AccLiquidityFeePool (5)
+  * LiquidityPoints(8)
   * Liquidity(1)
   * ShareState[(shares(1))]
   * BalanceTableMerkleRoot
@@ -63,7 +70,9 @@ contract PM {
     // Required for adding or modifying entry
     Ripemd160 payoutAddress, // Payout address for change and sold/redeemed shares
     int changeSats,
-    bytes entry,
+    bytes publicKeyHex,
+    int newLiquidity,
+    bytes newEntrySharesHex,
 
     // Inputs required for adding new entry
     bytes lastEntry,
@@ -72,6 +81,9 @@ contract PM {
     // Inputs required for modifying entry
     int prevLiquidity,
     bytes prevEntrySharesHex,
+    int prevAccLiquidityFeePoolState,
+    int prevLiquidityPoints,
+    bool redeemLiquidity,
     Sig signature,
     bytes merklePath,
 
@@ -101,10 +113,22 @@ contract PM {
     int globalLiquidityPos = globalShareStatusPos - 1;
     int prevGlobalLiquidity = unpack(scriptCode[globalLiquidityPos : globalShareStatusPos]);
 
+    // Global liquidity points
+    int globalLiquidityPointsPos = globalLiquidityPos - liquidityPointsByteLen;
+    int prevGlobalLiquidityPoints = unpack(scriptCode[globalLiquidityPointsPos : globalLiquidityPos]);
+
+    // Accumulated Liquidity Fee Pool
+    int globalAccLiquidityFeePoolPos = globalLiquidityPointsPos - liquidityFeePoolByteLen;
+    int prevGlobalAccLiquidityFeePool = unpack(scriptCode[globalAccLiquidityFeePoolPos : globalLiquidityPointsPos]);
+
+    // Liquidity Fee Pool
+    int globalLiquidityFeePoolPos = globalAccLiquidityFeePoolPos - liquidityFeePoolByteLen;
+    int prevGlobalLiquidityFeePool = unpack(scriptCode[globalLiquidityFeePoolPos : globalAccLiquidityFeePoolPos]);
+
     // Global votes
     int globalVotesLength = this.globalOptionCount * voteCountByteLen;
-    int globalVotesPos = globalLiquidityPos - globalVotesLength;
-    bytes prevGlobalVotes = scriptCode[globalVotesPos : globalLiquidityPos];
+    int globalVotesPos = globalLiquidityFeePoolPos - globalVotesLength;
+    bytes prevGlobalVotes = scriptCode[globalVotesPos : globalLiquidityFeePoolPos];
 
     // Oracle states
     int oracleStatesLen = oracleCount * oracleStateByteLength;
@@ -123,10 +147,7 @@ contract PM {
       SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.ALL | SigHash.FORKID;
       require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
 
-      // Extract entry paramerters
-      PubKey publicKey = PubKey(entry[ : entryLiqudityPos]);
-      int newLiquidity = unpack(entry[entryLiqudityPos : entrySharePos ]);
-      bytes newEntrySharesHex = entry[entrySharePos : ];
+      PubKey publicKey = PubKey(publicKeyHex);
 
       require(newLiquidity >= 0);
 
@@ -139,6 +160,7 @@ contract PM {
       bytes newBalanceTableRoot = b'';
 
       int redeemShares = 0; // Only relevant for redeeming shares
+      int redeemedLiquidityPoints = 0; // Only relevant for redeeming liquidity points
 
       if (action == 1) {
         // Add new entry
@@ -162,6 +184,8 @@ contract PM {
           publicKey
           + num2bin(newLiquidity, 1)
           + newEntrySharesHex
+          + num2bin(prevGlobalAccLiquidityFeePool, liquidityFeePoolByteLen) // Save current sats in fee pool
+          + num2bin(0, liquidityPointsByteLen) // User has 0 liquidity points
           );
 
         newBalanceTableRoot = MerkleTree.addLeafSafe(lastEntry,
@@ -215,16 +239,29 @@ contract PM {
           }
         }
 
+        // Calculate liquidity points: Contributed liquidity * new fees since last change
+        int feesSinceLastChange = prevGlobalAccLiquidityFeePool - prevAccLiquidityFeePoolState;
+        int newLiquidityPoints = prevLiquidityPoints + prevLiquidity * feesSinceLastChange;
+
+        if (redeemLiquidity) {
+          redeemedLiquidityPoints = newLiquidityPoints;
+          newLiquidityPoints = 0;
+        }
+
         bytes oldLeaf = sha256(
           publicKey
           + num2bin(prevLiquidity, 1)
           + prevEntrySharesHex
+          + num2bin(prevAccLiquidityFeePoolState, liquidityFeePoolByteLen)
+          + num2bin(prevLiquidityPoints, liquidityPointsByteLen)
           );
 
         bytes newLeaf = sha256(
           publicKey
           + num2bin(newLiquidity, 1)
           + newEntrySharesHex
+          + num2bin(prevGlobalAccLiquidityFeePool, liquidityFeePoolByteLen)  // Save current sats in fee pool
+          + num2bin(newLiquidityPoints, liquidityPointsByteLen) // Save point to be redeemed at a later point
           );
 
         newBalanceTableRoot = MerkleTree.updateLeaf(oldLeaf,
@@ -236,26 +273,52 @@ contract PM {
 
       // Determine new contract sat balance
       int prevSatBalance = Util.value(txPreimage);
-      int newBalance = 0;
+      int prevMarketSatBalance = prevSatBalance - prevGlobalLiquidityFeePool;
+      int newMarketSatBalance = 0;
       int redeemSats = 0;
       if (redeemShares != 0) {
         // User only sold winning shares
         redeemSats = redeemShares * PM.satScaling;
-        newBalance = prevSatBalance - redeemSats;
+        newMarketSatBalance = prevMarketSatBalance - redeemSats;
       } else {
         // TODO: redeemSats should exclude extracted liquidity so fees are only relevant for sold shares.
         // Market is either unresolved or user only changed liquidity
         int newLmsrBalance = FixLMSR.lmsr(newGlobalShareStatus, newGlobalLiquidity);
-        newBalance = newLmsrBalance * PM.satScalingAdjust; // Need to be 2^20 * lmsr output
-        redeemSats = prevSatBalance - newBalance;
+        newMarketSatBalance = newLmsrBalance * PM.satScalingAdjust; // Need to be 2^20 * lmsr output
+        redeemSats = prevMarketSatBalance - newMarketSatBalance;
       }
 
-      if (newBalance < dustLimit) {
-        newBalance = dustLimit; // TODO: Can be lowered and eventually removed.
+      // Remove redeemed liquidity fees from pool
+      int redeemedLiquidityPoolSats = redeemedLiquidityPoints / prevGlobalLiquidityPoints * prevGlobalLiquidityFeePool;
+      int newGlobalLiquidityFeePool = prevGlobalLiquidityFeePool - redeemedLiquidityPoolSats;
+
+      // Add new fees to liquidity fee pool
+      int liquidityFee = this.liquidityFeeRate * redeemSats / 100;
+      newGlobalLiquidityFeePool = newGlobalLiquidityFeePool + liquidityFee;
+
+      // Calculate new accumulated, collected liquidity fees
+      int newGlobalAccLiquidityFeePool = prevGlobalAccLiquidityFeePool + liquidityFee;
+
+      int newGlobalBalance = newMarketSatBalance + newGlobalLiquidityFeePool;
+
+      int newGlobalLiquidityPoints = prevGlobalLiquidityPoints
+        + liquidityFee * prevGlobalLiquidity
+        - redeemedLiquidityPoints;
+
+      if (newGlobalBalance < dustLimit) {
+        newGlobalBalance = dustLimit; // TODO: Can be lowered and eventually removed.
       }
 
-      bytes newScriptCode = scriptCode[ : globalLiquidityPos] + num2bin(newGlobalLiquidity, 1) + newGlobalShareStatus + newBalanceTableRoot;
-      bytes marketOutput = Util.buildOutput(newScriptCode, newBalance);
+      bytes newScriptCode =
+        scriptCode[ : globalLiquidityFeePoolPos]
+        + num2bin(newGlobalLiquidityFeePool, liquidityFeePoolByteLen)
+        + num2bin(newGlobalAccLiquidityFeePool, liquidityFeePoolByteLen)
+        + num2bin(newGlobalLiquidityPoints, liquidityPointsByteLen)
+        + num2bin(newGlobalLiquidity, 1)
+        + newGlobalShareStatus
+        + newBalanceTableRoot;
+
+      bytes marketOutput = Util.buildOutput(newScriptCode, newGlobalBalance);
       bytes payoutScript = Util.buildPublicKeyHashScript(payoutAddress);
       bytes changeOutput = Util.buildOutput(payoutScript, changeSats);
 
@@ -334,9 +397,16 @@ contract PM {
         }
       }
 
-      bytes newGlobalOracleStates = prevGlobalOracleStates[ : oracleStatePos] + newOracleState + prevGlobalOracleStates[oracleStatePos + oracleStateByteLength : ];
+      bytes newGlobalOracleStates = prevGlobalOracleStates[ : oracleStatePos]
+        + newOracleState
+        + prevGlobalOracleStates[oracleStatePos + oracleStateByteLength : ];
 
-      bytes newScriptCode = scriptCode[ : gobalDecisionPos] + newDecisionState + newGlobalOracleStates + newGlobalVotes + scriptCode[globalLiquidityPos : ];
+      bytes newScriptCode = scriptCode[ : gobalDecisionPos]
+        + newDecisionState
+        + newGlobalOracleStates
+        + newGlobalVotes
+        + scriptCode[globalLiquidityFeePoolPos : ];
+
       bytes marketOutput = Util.buildOutput(newScriptCode, Util.value(txPreimage));
       outputHash = hash256(marketOutput);
 
