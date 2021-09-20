@@ -9,13 +9,13 @@ contract PM {
   int requiredVotes;
   PubKey creatorPubKey;
   Ripemd160 creatorPayoutAddress;
-  int creatorFee;
-  int liquidityFeeRate; // Trade fees in percent payed to liquidity providers
+  int creatorFeeRate; // Trade fees in sats per 10000 sats payed to market creator
+  int liquidityFeeRate; // Trade fees in sats per 10000 sats payed to liquidity providers
 
   static const int dustLimit = 546;
 
   static const Ripemd160 developerAddress = Ripemd160(b'ae2c80a6e4bd7a01a0c8e6679f888234efac02b6');
-  static const int developerFee = 1; // 1% * 65536
+  static const int developerFeeRate = 20; // Trade fees in sats per 10000 sats payed to Vala
 
   static const int MaxOptionCount = 6; // Maximum number of outcomes
   static const int MaxOracleCount = 3; // Maximum number of oracles for resolving the market
@@ -293,7 +293,7 @@ contract PM {
       int newGlobalLiquidityFeePool = prevGlobalLiquidityFeePool - redeemedLiquidityPoolSats;
 
       // Add new fees to liquidity fee pool
-      int liquidityFee = this.liquidityFeeRate * redeemSats / 100;
+      int liquidityFee = this.liquidityFeeRate * redeemSats / 10000;
       newGlobalLiquidityFeePool = newGlobalLiquidityFeePool + liquidityFee;
 
       // Calculate new accumulated, collected liquidity fees
@@ -324,8 +324,8 @@ contract PM {
 
       if (redeemSats > 0) {
         // User gets payed out and has to pay fees to developer and creator
-        int developerSatFee = developerFee * redeemSats / 100;
-        int creatorSatFee = this.creatorFee * redeemSats / 100;
+        int developerSatFee = developerFeeRate * redeemSats / 10000;
+        int creatorSatFee = this.creatorFeeRate * redeemSats / 10000;
 
         bytes developerOutputScript = Util.buildPublicKeyHashScript(developerAddress);
         bytes creatorOutputScript = Util.buildPublicKeyHashScript(this.creatorPayoutAddress);
