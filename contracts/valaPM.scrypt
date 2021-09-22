@@ -188,6 +188,7 @@ contract PM {
           + num2bin(0, liquidityPointsByteLen) // User has 0 liquidity points
           );
 
+        // TODO: Move outside loop, same for action == 2
         newBalanceTableRoot = MerkleTree.addLeafSafe(lastEntry,
           lastMerklePath,
           prevBalanceTableRoot,
@@ -277,6 +278,7 @@ contract PM {
       int newMarketSatBalance = 0;
       int redeemSats = 0;
       if (redeemShares != 0) {
+        // TODO: Should prevent redeeming invalid shares at the same time
         // User only sold winning shares
         redeemSats = redeemShares * PM.satScaling;
         newMarketSatBalance = prevMarketSatBalance - redeemSats;
@@ -289,11 +291,17 @@ contract PM {
       }
 
       // Remove redeemed liquidity fees from pool
-      int redeemedLiquidityPoolSats = redeemedLiquidityPoints / prevGlobalLiquidityPoints * prevGlobalLiquidityFeePool;
+      int redeemedLiquidityPoolSats = 0;
+      if (prevGlobalLiquidityPoints > 0 && prevGlobalLiquidityFeePool > 0) {
+        redeemedLiquidityPoints / prevGlobalLiquidityPoints * prevGlobalLiquidityFeePool;
+      }
       int newGlobalLiquidityFeePool = prevGlobalLiquidityFeePool - redeemedLiquidityPoolSats;
 
       // Add new fees to liquidity fee pool
-      int liquidityFee = this.liquidityFeeRate * redeemSats / 10000;
+      int liquidityFee = 0;
+      if (redeemSats > 0) {
+        liquidityFee = this.liquidityFeeRate * redeemSats / 10000;
+      }
       newGlobalLiquidityFeePool = newGlobalLiquidityFeePool + liquidityFee;
 
       // Calculate new accumulated, collected liquidity fees
