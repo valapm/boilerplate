@@ -293,7 +293,7 @@ contract PM {
       // Remove redeemed liquidity fees from pool
       int redeemedLiquidityPoolSats = 0;
       if (prevGlobalLiquidityPoints > 0 && prevGlobalLiquidityFeePool > 0) {
-        redeemedLiquidityPoints / prevGlobalLiquidityPoints * prevGlobalLiquidityFeePool;
+        redeemedLiquidityPoolSats = prevGlobalLiquidityFeePool * redeemedLiquidityPoints / prevGlobalLiquidityPoints ;
       }
       int newGlobalLiquidityFeePool = prevGlobalLiquidityFeePool - redeemedLiquidityPoolSats;
 
