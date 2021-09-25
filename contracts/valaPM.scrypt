@@ -162,6 +162,13 @@ contract PM {
       int redeemShares = 0; // Only relevant for redeeming shares
       int redeemedLiquidityPoints = 0; // Only relevant for redeeming liquidity points
 
+      int prevSatBalance = Util.value(txPreimage);
+      int prevMarketSatBalance = prevSatBalance - prevGlobalLiquidityFeePool;
+      int newMarketSatBalance = 0;
+      int redeemSats = 0;
+      int liquidityFee = 0;
+
+      // Determine new global shares
       if (action == 1) {
         // Add new entry
 
@@ -179,23 +186,7 @@ contract PM {
             i += 1;
           }
         }
-
-        bytes newLeaf = sha256(
-          publicKey
-          + num2bin(newLiquidity, 1)
-          + newEntrySharesHex
-          + num2bin(prevGlobalAccLiquidityFeePool, liquidityFeePoolByteLen) // Save current sats in fee pool
-          + num2bin(0, liquidityPointsByteLen) // User has 0 liquidity points
-          );
-
-        // TODO: Move outside loop, same for action == 2
-        newBalanceTableRoot = MerkleTree.addLeafSafe(lastEntry,
-          lastMerklePath,
-          prevBalanceTableRoot,
-          newLeaf);
-
-      }
-      else if (action == 2) {
+      } else if (action == 2) {
         // Update Entry
         // TODO: Should market creator extract all liquidity as well?
 
@@ -239,11 +230,50 @@ contract PM {
             i += 1;
           }
         }
+      }
 
-        // Calculate liquidity points: Contributed liquidity * new fees since last change
-        int feesSinceLastChange = prevGlobalAccLiquidityFeePool - prevAccLiquidityFeePoolState;
+      // Determine new contract sat balance
+      if (redeemShares != 0) {
+        // TODO: Should prevent redeeming invalid shares at the same time
+        // User only sold winning shares
+        redeemSats = redeemShares * PM.satScaling;
+        newMarketSatBalance = prevMarketSatBalance - redeemSats;
+      } else {
+        // TODO: redeemSats should exclude extracted liquidity so fees are only relevant for sold shares.
+        // Market is either unresolved or user only changed liquidity
+        int newLmsrBalance = FixLMSR.lmsr(newGlobalShareStatus, newGlobalLiquidity);
+        newMarketSatBalance = newLmsrBalance * PM.satScalingAdjust; // Need to be 2^20 * lmsr output
+        redeemSats = prevMarketSatBalance - newMarketSatBalance;
+      }
+
+
+      if (redeemSats > 0) {
+        liquidityFee = this.liquidityFeeRate * redeemSats / 10000;
+      }
+
+      // Calculate new accumulated, collected liquidity fees
+      int newGlobalAccLiquidityFeePool = prevGlobalAccLiquidityFeePool + liquidityFee;
+
+      // Determine new balance table merkle root
+      if (action == 1) {
+        bytes newLeaf = sha256(
+          publicKey
+          + num2bin(newLiquidity, 1)
+          + newEntrySharesHex
+          + num2bin(newGlobalAccLiquidityFeePool, liquidityFeePoolByteLen) // Save current sats in fee pool
+          + num2bin(0, liquidityPointsByteLen) // User has 0 liquidity points
+          );
+
+        newBalanceTableRoot = MerkleTree.addLeafSafe(lastEntry,
+          lastMerklePath,
+          prevBalanceTableRoot,
+          newLeaf);
+
+      } else if (action == 2) {
+
+        // Calculate new entry liquidity points: Contributed liquidity * new fees since last change
+        int feesSinceLastChange = prevGlobalAccLiquidityFeePool - prevAccLiquidityFeePoolState + liquidityFee;
         int newLiquidityPoints = prevLiquidityPoints + prevLiquidity * feesSinceLastChange;
-
         if (redeemLiquidity) {
           redeemedLiquidityPoints = newLiquidityPoints;
           newLiquidityPoints = 0;
@@ -261,7 +291,7 @@ contract PM {
           publicKey
           + num2bin(newLiquidity, 1)
           + newEntrySharesHex
-          + num2bin(prevGlobalAccLiquidityFeePool, liquidityFeePoolByteLen)  // Save current sats in fee pool
+          + num2bin(newGlobalAccLiquidityFeePool, liquidityFeePoolByteLen)  // Save current sats in fee pool
           + num2bin(newLiquidityPoints, liquidityPointsByteLen) // Save point to be redeemed at a later point
           );
 
@@ -272,24 +302,6 @@ contract PM {
 
       }
 
-      // Determine new contract sat balance
-      int prevSatBalance = Util.value(txPreimage);
-      int prevMarketSatBalance = prevSatBalance - prevGlobalLiquidityFeePool;
-      int newMarketSatBalance = 0;
-      int redeemSats = 0;
-      if (redeemShares != 0) {
-        // TODO: Should prevent redeeming invalid shares at the same time
-        // User only sold winning shares
-        redeemSats = redeemShares * PM.satScaling;
-        newMarketSatBalance = prevMarketSatBalance - redeemSats;
-      } else {
-        // TODO: redeemSats should exclude extracted liquidity so fees are only relevant for sold shares.
-        // Market is either unresolved or user only changed liquidity
-        int newLmsrBalance = FixLMSR.lmsr(newGlobalShareStatus, newGlobalLiquidity);
-        newMarketSatBalance = newLmsrBalance * PM.satScalingAdjust; // Need to be 2^20 * lmsr output
-        redeemSats = prevMarketSatBalance - newMarketSatBalance;
-      }
-
       // Remove redeemed liquidity fees from pool
       int redeemedLiquidityPoolSats = 0;
       if (prevGlobalLiquidityPoints > 0 && prevGlobalLiquidityFeePool > 0) {
@@ -298,14 +310,7 @@ contract PM {
       int newGlobalLiquidityFeePool = prevGlobalLiquidityFeePool - redeemedLiquidityPoolSats;
 
       // Add new fees to liquidity fee pool
-      int liquidityFee = 0;
-      if (redeemSats > 0) {
-        liquidityFee = this.liquidityFeeRate * redeemSats / 10000;
-      }
       newGlobalLiquidityFeePool = newGlobalLiquidityFeePool + liquidityFee;
-
-      // Calculate new accumulated, collected liquidity fees
-      int newGlobalAccLiquidityFeePool = prevGlobalAccLiquidityFeePool + liquidityFee;
 
       int newGlobalBalance = newMarketSatBalance + newGlobalLiquidityFeePool;
 
