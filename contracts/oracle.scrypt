@@ -1,20 +1,54 @@
 import "util.scrypt";
+import "./rabin.scrypt";
 
 contract Oracle {
   int rabinPubKey;
 
-  public function burn(
+  static const int shaLength = 32;
+
+  public function update(
     SigHashPreimage txPreimage,
+    int action, // 1 = update details; 2 = burn;
+
+    bytes details,
+    int oracleSig,
+    int paddingCount,
+
     int burnSats
-    ) {
+  ) {
     SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
     require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
 
+    bytes prevScriptCode = Util.scriptCode(txPreimage);
     int prevSatBalance = Util.value(txPreimage);
-    bytes scriptCode = Util.scriptCode(txPreimage);
+    bytes newScriptCode = prevScriptCode;  
+    int newSatBalance = prevSatBalance;
+    
+    if (action == 1) {
+      // Update oracle details
 
-    bytes output = Util.buildOutput(scriptCode, prevSatBalance + burnSats);
+      // Verify signature
+      RabinSignature rabin = new RabinSignature();
+      bytes padding = num2bin(0, paddingCount);
+      bytes detailsHash = sha256(details);
+      require(rabin.verifySig(oracleSig, detailsHash, padding, this.rabinPubKey));
+
+      // Replace details hash in scriptcode
+      int scriptLen = len(prevScriptCode);
+      int detailsPos = scriptLen - shaLength;
+      bytes prevDetailsHash = prevScriptCode[detailsPos :];
+
+      newScriptCode = prevScriptCode[: detailsPos] + sha256(details);
+    } else if (action == 2) {
+      // Burn sats
+
+      // Increase contract balance
+      newSatBalance = prevSatBalance + burnSats;
+    }
+
+    bytes output = Util.buildOutput(newScriptCode, newSatBalance);
     bytes outputHash = hash256(output);
+
     require(outputHash == Util.hashOutputs(txPreimage));
   }
 }
