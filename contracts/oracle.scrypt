@@ -21,9 +21,9 @@ contract Oracle {
 
     bytes prevScriptCode = Util.scriptCode(txPreimage);
     int prevSatBalance = Util.value(txPreimage);
-    bytes newScriptCode = prevScriptCode;  
+    bytes newScriptCode = prevScriptCode;
     int newSatBalance = prevSatBalance;
-    
+
     if (action == 1) {
       // Update oracle details
 
@@ -38,7 +38,7 @@ contract Oracle {
       int detailsPos = scriptLen - shaLength;
       bytes prevDetailsHash = prevScriptCode[detailsPos :];
 
-      newScriptCode = prevScriptCode[: detailsPos] + sha256(details);
+      newScriptCode = prevScriptCode[: detailsPos] + detailsHash;
     } else if (action == 2) {
       // Burn sats
 
