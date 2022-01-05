@@ -1,18 +1,11 @@
 import "util.scrypt";
-import "./merkleTree.scrypt";
 
 contract ValaIndex {
-  static const int shaLength = 32;
+  public function update(SigHashPreimage txPreimage) {
+    SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
+    require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
 
-  static const int satFee = 218; // Around 50 cents at time of writing.
-  static const int scalingFactor = 65536;
-
-  // 1 = add market; 2 = add oracle;
-  public function update(SigHashPreimage txPreimage,
-    int action,
-
-    bytes hash,
-    int burnSats) {
-    require(true);
+    bytes output = Util.buildOutput(Util.scriptCode(txPreimage), Util.value(txPreimage));
+    require(hash256(output) == Util.hashOutputs(txPreimage));
   }
 }
