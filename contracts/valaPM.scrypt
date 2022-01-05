@@ -338,8 +338,13 @@ contract PM {
       if (redeemSats > 0) {
         // User gets payed out and has to pay fees to developer and creator
         int developerSatFee = developerFeeRate * redeemSats / 10000;
+        if (developerSatFee < dustLimit) {
+          developerSatFee = dustLimit;
+        }
         int creatorSatFee = this.creatorFeeRate * redeemSats / 10000;
-
+        if (creatorSatFee < dustLimit) {
+          creatorSatFee = dustLimit;
+        }
         bytes developerOutputScript = Util.buildPublicKeyHashScript(developerAddress);
         bytes creatorOutputScript = Util.buildPublicKeyHashScript(this.creatorPayoutAddress);
         bytes developerOutput = Util.buildOutput(developerOutputScript, developerSatFee);
