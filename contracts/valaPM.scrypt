@@ -12,7 +12,7 @@ contract PM {
   int creatorFeeRate; // Trade fees in sats per 10000 sats payed to market creator
   int liquidityFeeRate; // Trade fees in sats per 10000 sats payed to liquidity providers
 
-  static const int dustLimit = 546;
+  static const int p2pkhDust = 546;
 
   static const Ripemd160 developerAddress = Ripemd160(b'ae2c80a6e4bd7a01a0c8e6679f888234efac02b6');
   static const int developerFeeRate = 20; // Trade fees in sats per 10000 sats payed to Vala
@@ -93,7 +93,9 @@ contract PM {
     int paddingCount,
 
     // Inputs required for oracle vote
-    int oracleDecision
+    int oracleDecision,
+
+    int dustLimit
     ) {
 
     // Extract current state parameters
@@ -319,7 +321,7 @@ contract PM {
         - redeemedLiquidityPoints;
 
       if (newGlobalBalance < dustLimit) {
-        newGlobalBalance = dustLimit; // TODO: Can be lowered and eventually removed.
+        newGlobalBalance = dustLimit;
       }
 
       bytes newScriptCode =
@@ -338,12 +340,12 @@ contract PM {
       if (redeemSats > 0) {
         // User gets payed out and has to pay fees to developer and creator
         int developerSatFee = developerFeeRate * redeemSats / 10000;
-        if (developerSatFee < dustLimit) {
-          developerSatFee = dustLimit;
+        if (developerSatFee < p2pkhDust) {
+          developerSatFee = p2pkhDust;
         }
         int creatorSatFee = this.creatorFeeRate * redeemSats / 10000;
-        if (creatorSatFee < dustLimit) {
-          creatorSatFee = dustLimit;
+        if (creatorSatFee < p2pkhDust) {
+          creatorSatFee = p2pkhDust;
         }
         bytes developerOutputScript = Util.buildPublicKeyHashScript(developerAddress);
         bytes creatorOutputScript = Util.buildPublicKeyHashScript(this.creatorPayoutAddress);
