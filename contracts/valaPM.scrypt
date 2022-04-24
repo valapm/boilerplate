@@ -241,11 +241,16 @@ contract PM {
         redeemSats = redeemShares * PM.satScaling;
         newMarketSatBalance = prevMarketSatBalance - redeemSats;
       } else {
-        // TODO: redeemSats should exclude extracted liquidity so fees are only relevant for sold shares.
         // Market is either unresolved or user only changed liquidity
         int newLmsrBalance = FixLMSR.lmsr(newGlobalShareStatus, newGlobalLiquidity);
         newMarketSatBalance = newLmsrBalance * PM.satScalingAdjust; // Need to be 2^20 * lmsr output
         redeemSats = prevMarketSatBalance - newMarketSatBalance;
+
+        if (newGlobalShareStatus == prevGlobalShareStatus) {
+          // Do not calculate any fees if only liquidity is extracted
+          // FIXME: Fees are still added if balance is changed at the same time. Not important.
+          redeemSats = 0;
+        }
       }
 
 
