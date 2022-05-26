@@ -242,6 +242,7 @@ contract PM {
         newMarketSatBalance = prevMarketSatBalance - redeemSats;
       } else {
         // Market is either unresolved or user only changed liquidity
+        // FIXME: If user buys for as much as he sells, he can avoid fees. Not a big deal.
         int newLmsrBalance = FixLMSR.lmsr(newGlobalShareStatus, newGlobalLiquidity);
         newMarketSatBalance = newLmsrBalance * PM.satScalingAdjust; // Need to be 2^20 * lmsr output
         redeemSats = prevMarketSatBalance - newMarketSatBalance;
