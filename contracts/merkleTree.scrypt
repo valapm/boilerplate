@@ -74,10 +74,9 @@ library MerkleTree {
 
         if (left) {
           if (joined) {
-            require(sibling == merkleValue); // Make sure that lastLeaf really is the last leaf.
-            merkleValue = sha256(merkleValue + sibling);
+            merkleValue = sha256(merkleValue + merkleValue);
           } else {
-            require(sibling == lastLeafValue);
+            require(sibling == lastLeafValue); // Make sure that lastLeaf really is the last leaf.
             merkleValue = sha256(lastLeafValue + merkleValue);
           }
           joined = true;
