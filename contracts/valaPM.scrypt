@@ -14,7 +14,7 @@ contract PM {
 
   static const int p2pkhDust = 546;
 
-  static const Ripemd160 developerAddress = Ripemd160(b'ae2c80a6e4bd7a01a0c8e6679f888234efac02b6');
+  static const Ripemd160 developerAddress = Ripemd160(b'53faba2fb9a28dfa94d93270079cd2aa270180f3');
   static const int developerFeeRate = 20; // Trade fees in sats per 10000 sats payed to Vala
 
   static const int MaxOptionCount = 6; // Maximum number of outcomes
