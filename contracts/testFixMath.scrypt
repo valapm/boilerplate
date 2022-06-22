@@ -1,29 +1,31 @@
 import "./fixMath.scrypt";
 
+static const scale = 18446744073709551616
+
 contract TestFixMath {
   public function testLog(int x) {
-    require(FixMath.log2(1 * 65536) == 0 * 65536);
+    require(FixMath.log2(1 * scale) == 0 * scale);
 
-    int log2test1 = FixMath.log2(32 * 65536);
-    require(log2test1 == 5 * 65536 || log2test1 == 5 * 65536 - 1);
-    int log2test2 = FixMath.log2(64 * 65536);
-    require(log2test2 == 6 * 65536 || log2test2 == 6 * 65536 - 1);
+    int log2test1 = FixMath.log2(32 * scale);
+    require(log2test1 == 5 * scale || log2test1 == 5 * scale - 1);
+    int log2test2 = FixMath.log2(64 * scale);
+    require(log2test2 == 6 * scale || log2test2 == 6 * scale - 1);
 
-    require(FixMath.log(1 * 65536) == 0 * 65536);
+    require(FixMath.log(1 * scale) == 0 * scale);
 
-    int logtest1 = FixMath.log(32 * 65536);
+    int logtest1 = FixMath.log(32 * scale);
     require(logtest1 == 227130 || logtest1 == 227130 - 1);
-    int logtest2 = FixMath.log(64 * 65536);
+    int logtest2 = FixMath.log(64 * scale);
     require(logtest2 == 272556 || logtest2 == 272556 - 1);
 
-    require(FixMath.log10(1 * 65536) == 0 * 65536);
+    require(FixMath.log10(1 * scale) == 0 * scale);
 
-    int log10test1 = FixMath.log10(100 * 65536);
-    require(log10test1 == 2 * 65536 || log10test1 == 2 * 65536 - 1); // script always uses floor
+    int log10test1 = FixMath.log10(100 * scale);
+    require(log10test1 == 2 * scale || log10test1 == 2 * scale - 1); // script always uses floor
   }
 
   public function testExp(int x) {
-    int exptest1 = FixMath.exp(10 * 65536);
-    require(exptest1 / 65536 == 22026);
+    int exptest1 = FixMath.exp(10 * scale);
+    require(exptest1 / scale == 22026);
   }
 }
