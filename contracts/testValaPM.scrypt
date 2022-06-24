@@ -100,7 +100,7 @@ contract PM {
     ) {
 
     // Extract current state parameters
-    bytes scriptCode = Util.scriptCode(txPreimage);
+    bytes scriptCode = SigHash.scriptCode(txPreimage);
     int scriptLen = len(scriptCode);
     int oracleCount = len(this.oracleKeys) / oracleInfoByteLength;
 
@@ -148,7 +148,7 @@ contract PM {
     if (action == 1 || action == 2) {
 
       SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.ALL | SigHash.FORKID;
-      // require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
+      // require(Tx.checkPreimageSigHashType(txPreimage, sigHashType));
 
       PubKey publicKey = PubKey(publicKeyHex);
 
@@ -165,7 +165,7 @@ contract PM {
       int redeemShares = 0; // Only relevant for redeeming shares
       int redeemedLiquidityPoints = 0; // Only relevant for redeeming liquidity points
 
-      int prevSatBalance = Util.value(txPreimage);
+      int prevSatBalance = SigHash.value(txPreimage);
       int prevMarketSatBalance = prevSatBalance - prevGlobalLiquidityFeePool;
       int newMarketSatBalance = 0;
       int redeemSats = 0;
@@ -340,9 +340,9 @@ contract PM {
         + newGlobalShareStatus
         + newBalanceTableRoot;
 
-      bytes marketOutput = Util.buildOutput(newScriptCode, newGlobalBalance);
-      bytes payoutScript = Util.buildPublicKeyHashScript(payoutAddress);
-      bytes changeOutput = Util.buildOutput(payoutScript, changeSats);
+      bytes marketOutput = Utils.buildOutput(newScriptCode, newGlobalBalance);
+      bytes payoutScript = Utils.buildPublicKeyHashScript(payoutAddress);
+      bytes changeOutput = Utils.buildOutput(payoutScript, changeSats);
 
       if (redeemSats > 0) {
         // User gets payed out and has to pay fees to developer and creator
@@ -354,10 +354,10 @@ contract PM {
         if (creatorSatFee < p2pkhDust) {
           creatorSatFee = p2pkhDust;
         }
-        bytes developerOutputScript = Util.buildPublicKeyHashScript(developerAddress);
-        bytes creatorOutputScript = Util.buildPublicKeyHashScript(this.creatorPayoutAddress);
-        bytes developerOutput = Util.buildOutput(developerOutputScript, developerSatFee);
-        bytes creatorOutput = Util.buildOutput(creatorOutputScript, creatorSatFee);
+        bytes developerOutputScript = Utils.buildPublicKeyHashScript(developerAddress);
+        bytes creatorOutputScript = Utils.buildPublicKeyHashScript(this.creatorPayoutAddress);
+        bytes developerOutput = Utils.buildOutput(developerOutputScript, developerSatFee);
+        bytes creatorOutput = Utils.buildOutput(creatorOutputScript, creatorSatFee);
 
         outputHash = hash256(marketOutput + developerOutput + creatorOutput + changeOutput);
       } else {
@@ -370,19 +370,18 @@ contract PM {
 
       // OP_PUSHTX with AnyoneCanPay and Sighash Single
       SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
-      require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
+      require(Tx.checkPreimageSigHashType(txPreimage, sigHashType));
 
       int oracleKeyPos = oraclePos * oracleInfoByteLength;
       int oraclePubKey = unpack(this.oracleKeys[oracleKeyPos : oracleKeyPos + rabinKeyByteLength]);
       int oracleVotes = unpack(this.oracleKeys[oracleKeyPos + rabinKeyByteLength : oracleKeyPos + oracleInfoByteLength]);
-      bytes padding = num2bin(0, paddingCount);
       RabinSignature rabin = new RabinSignature();
 
       // Prevent decision change in case that multiple outcomes have enough votes
       require(prevGlobalDecided == 0);
 
       // Verify signature
-      bytes outpoint = Util.outpoint(txPreimage);
+      bytes outpoint = SigHash.outpoint(txPreimage);
       bytes prevTxId = outpoint[ : 32];
       bytes sigContent = b'';
       if (action == 3) {
@@ -393,7 +392,12 @@ contract PM {
         // Oracle should sign a decision + txid
         sigContent = num2bin(oracleDecision, 1) + prevTxId;
       }
-      require(rabin.verifySig(oracleSig, sigContent, padding, oraclePubKey));
+
+      RabinSig sig = {
+        oracleSig,
+        num2bin(0, paddingCount)
+      };
+      require(RabinSignature.checkSig(sigContent, sig, oraclePubKey));
 
       int oracleStatePos = oracleStateByteLength * oraclePos;
       bytes prevOracleState = prevGlobalOracleStates[oracleStatePos : oracleStatePos + oracleStateByteLength];
@@ -434,11 +438,11 @@ contract PM {
         + newGlobalVotes
         + scriptCode[globalLiquidityFeePoolPos : ];
 
-      bytes marketOutput = Util.buildOutput(newScriptCode, Util.value(txPreimage));
+      bytes marketOutput = Utils.buildOutput(newScriptCode, SigHash.value(txPreimage));
       outputHash = hash256(marketOutput);
 
     }
 
-    require(outputHash == Util.hashOutputs(txPreimage));
+    require(outputHash == SigHash.hashOutputs(txPreimage));
   }
 }

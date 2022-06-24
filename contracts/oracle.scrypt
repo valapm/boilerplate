@@ -17,10 +17,10 @@ contract Oracle {
     int burnSats
   ) {
     SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
-    require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
+    require(Tx.checkPreimageSigHashType(txPreimage, sigHashType));
 
-    bytes prevScriptCode = Util.scriptCode(txPreimage);
-    int prevSatBalance = Util.value(txPreimage);
+    bytes prevScriptCode = SigHash.scriptCode(txPreimage);
+    int prevSatBalance = SigHash.value(txPreimage);
     bytes newScriptCode = prevScriptCode;
     int newSatBalance = prevSatBalance;
 
@@ -28,15 +28,16 @@ contract Oracle {
       // Update oracle details
 
       // Verify signature
-      RabinSignature rabin = new RabinSignature();
-      bytes padding = num2bin(0, paddingCount);
       bytes detailsHash = sha256(details);
-      require(rabin.verifySig(oracleSig, detailsHash, padding, this.rabinPubKey));
+      RabinSig sig = {
+        oracleSig,
+        num2bin(0, paddingCount)
+      };
+      require(RabinSignature.checkSig(detailsHash, sig, this.rabinPubKey));
 
       // Replace details hash in scriptcode
       int scriptLen = len(prevScriptCode);
       int detailsPos = scriptLen - shaLength;
-      bytes prevDetailsHash = prevScriptCode[detailsPos :];
 
       newScriptCode = prevScriptCode[: detailsPos] + detailsHash;
     } else if (action == 2) {
@@ -46,9 +47,9 @@ contract Oracle {
       newSatBalance = prevSatBalance + burnSats;
     }
 
-    bytes output = Util.buildOutput(newScriptCode, newSatBalance);
+    bytes output = Utils.buildOutput(newScriptCode, newSatBalance);
     bytes outputHash = hash256(output);
 
-    require(outputHash == Util.hashOutputs(txPreimage));
+    require(outputHash == SigHash.hashOutputs(txPreimage));
   }
 }
