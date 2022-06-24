@@ -66,7 +66,6 @@ contract PM {
   */
   public function updateMarket(
     SigHashPreimage txPreimage,
-    int prevSatBalance,
     int action, // 1 = add entry; 2 = update entry; 3 = oracle commit; 4 = oracle vote
 
     // Required for adding or modifying entry
@@ -147,6 +146,10 @@ contract PM {
 
     bytes outputHash = b'';
     if (action == 1 || action == 2) {
+
+      SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.ALL | SigHash.FORKID;
+      // require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
+
       PubKey publicKey = PubKey(publicKeyHex);
 
       require(newLiquidity >= 0);
@@ -162,6 +165,7 @@ contract PM {
       int redeemShares = 0; // Only relevant for redeeming shares
       int redeemedLiquidityPoints = 0; // Only relevant for redeeming liquidity points
 
+      int prevSatBalance = Util.value(txPreimage);
       int prevMarketSatBalance = prevSatBalance - prevGlobalLiquidityFeePool;
       int newMarketSatBalance = 0;
       int redeemSats = 0;
@@ -363,6 +367,10 @@ contract PM {
     }
     else if (action == 3 || action == 4) {
       // Update oracle state
+
+      // OP_PUSHTX with AnyoneCanPay and Sighash Single
+      SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
+      require(Util.checkPreimageSigHashType(txPreimage, sigHashType));
 
       int oracleKeyPos = oraclePos * oracleInfoByteLength;
       int oraclePubKey = unpack(this.oracleKeys[oracleKeyPos : oracleKeyPos + rabinKeyByteLength]);
