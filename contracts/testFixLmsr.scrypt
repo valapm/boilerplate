@@ -3,15 +3,9 @@ import "./fixLmsr.scrypt";
 contract TestFixLMSR {
 
   public function test(int i) {
-    // TODO: Test limits
-    bytes options = b'010203';
-    int liquidity = 3;
+    bytes options = b'010202';
+    int liquidity = 2;
     int testLmsr1 = FixLMSR.lmsr(options, liquidity);
-    require(testLmsr1 / 4 == 29523); // Ensure accuracy up to 2^14
-
-    liquidity = 0;
-    int testLmsr2 = FixLMSR.lmsr(options, liquidity);
-    require(testLmsr2 == 196608); // Ensure accuracy up to 2^14
+    require(testLmsr1 == 72238190907082406972);
   }
-
 }

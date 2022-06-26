@@ -1,5 +1,5 @@
 const { expect } = require('chai');
-const { bsv, buildContractClass, Ripemd160, Sig, PubKey, signTx, toHex, Bytes } = require('scryptlib');
+const { bsv, buildContractClass, Sig, PubKey, signTx, toHex, Bytes } = require('scryptlib');
 const { compileContract, inputIndex, inputSatoshis, newTx } = require('../../helper');
 
 const privateKey = new bsv.PrivateKey.fromRandom('testnet')
@@ -29,7 +29,7 @@ describe('Test sCrypt contract Asm In Javascript', () => {
     result = asm.equal(11).verify()
     expect(result.success, result.error).to.be.true
     
-    sig = signTx(tx, privateKey, asm.lockingScript.toASM(), inputSatoshis)
+    sig = signTx(tx, privateKey, asm.lockingScript, inputSatoshis)
     result = asm.p2pkh(new Sig(toHex(sig)), new PubKey(toHex(publicKey))).verify( { tx, inputSatoshis, inputIndex } )
     expect(result.success, result.error).to.be.true
 

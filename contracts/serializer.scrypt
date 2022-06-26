@@ -1,4 +1,3 @@
-import "./util.scrypt";
 
 // a de/serializer for basic types
 
@@ -31,17 +30,17 @@ library Reader {
             ret = b[this.pos : this.pos + len];
         }
         else if (header == 0x4c) {
-            len = Util.fromLEUnsigned(b[this.pos : this.pos + 1]);
+            len = Utils.fromLEUnsigned(b[this.pos : this.pos + 1]);
             this.pos += 1;
             ret = b[this.pos : this.pos + len];
         }
         else if (header == 0x4d) {
-            len = Util.fromLEUnsigned(b[this.pos : this.pos + 2]);
+            len = Utils.fromLEUnsigned(b[this.pos : this.pos + 2]);
             this.pos += 2;
             ret = b[this.pos : this.pos + len];
         }
         else if (header == 0x4e) {
-            len = Util.fromLEUnsigned(b[this.pos : this.pos + 4]);
+            len = Utils.fromLEUnsigned(b[this.pos : this.pos + 4]);
             this.pos += 4;
             ret = b[this.pos : this.pos + len];
         }
@@ -57,7 +56,7 @@ library Reader {
     function readBool() : bool {
         bytes b = this.buf[this.pos : this.pos + 1];
         this.pos++;
-        return OpCode.OP_0 != b;
+        return b'00' != b;
     }
 
     function readInt() : int {
@@ -82,16 +81,16 @@ library Writer {
         bytes header = b'';
 
         if (n < 0x4c) {
-            header = Util.toLEUnsigned(n, 1);
+            header = Utils.toLEUnsigned(n, 1);
         }
         else if (n < 0x100) {
-            header = b'4c' + Util.toLEUnsigned(n, 1);
+            header = b'4c' + Utils.toLEUnsigned(n, 1);
         }
         else if (n < 0x10000) {
-            header = b'4d' + Util.toLEUnsigned(n, 2);
+            header = b'4d' + Utils.toLEUnsigned(n, 2);
         }
         else if (n < 0x100000000) {
-            header = b'4e' + Util.toLEUnsigned(n, 4);
+            header = b'4e' + Utils.toLEUnsigned(n, 4);
         }
         else {
             // shall not reach here
@@ -103,12 +102,12 @@ library Writer {
 
     // uses fixed 1 byte to represent a boolean, plus length
     static function writeBool(bool x) : bytes {
-        return x ? OpCode.OP_1 : OpCode.OP_0;
+        return x ? b'01' : b'00';
     }
 
     // int is little endian
     static function writeInt(int x) : bytes {
-        return writeBytes(pack(x));
+        return writeBytes(x == 0 ? b'00' : pack(x));
     }
 
     static function serializeState(bytes stateBuf) : bytes {
@@ -118,76 +117,3 @@ library Writer {
     }
 }
 
-contract Test {
-    public function testBool(bool f) {
-        bytes buf = Writer.writeBool(f);
-
-        Reader r = new Reader(buf);
-        bool f_ = r.readBool();
-        require(f_ == f);
-        require(r.eof());
-    }
-    public function testBytes(bytes b) {
-        bytes buf = Writer.writeBytes(b);
-
-        Reader r = new Reader(buf);
-        bytes b_ = r.readBytes();
-        require(b_ == b);
-        require(r.eof());
-    }
-
-    public function testInt(int i) {
-        bytes buf = Writer.writeInt(i);
-
-        Reader r = new Reader(buf);
-        int i_ = r.readInt();
-        require(i_ == i);
-        require(r.eof());
-    }
-
-    public function main(bool f, bytes b, int i) {
-        {
-            bytes buf = Writer.writeBool(f);
-
-            Reader r = new Reader(buf);
-            bool f_ = r.readBool();
-            require(f_ == f);
-            require(r.eof());
-        }
-        {
-            bytes buf = Writer.writeBytes(b);
-
-            Reader r = new Reader(buf);
-            bytes b_ = r.readBytes();
-            require(b_ == b);
-            require(r.eof());
-        }
-        {
-            bytes buf = Writer.writeInt(i);
-
-            Reader r = new Reader(buf);
-            int i_ = r.readInt();
-            require(i_ == i);
-            require(r.eof());
-        }
-
-        bytes buf = Writer.writeInt(i) + Writer.writeBytes(b) + Writer.writeBytes(b) + Writer.writeBool(f) + Writer.writeInt(i) + Writer.writeBytes(b);
-
-        Reader r = new Reader(buf);
-
-        int i_ = r.readInt();
-        require(i_ == i);
-        require(!r.eof());
-        bytes b_ = r.readBytes();
-        require(b_ == b);
-        b_ = r.readBytes();
-        require(b_ == b);
-        bool f_ = r.readBool();
-        require(f_ == f);
-        i_ = r.readInt();
-        require(i_ == i);
-        b_ = r.readBytes();
-        require(b_ == b);
-        require(r.eof());
-    }
-}

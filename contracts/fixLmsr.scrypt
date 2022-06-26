@@ -24,11 +24,11 @@ library FixLMSR {
         }
       }
 
-      result = result * 65536;
+      result = result << 64;
     } else {
       loop (MaxOptionLength) {
         if (i < optionCount) {
-          x = x + FixMath.exp(unpack(options[i : i + 1]) * 65536 / liquidity);
+          x = x + FixMath.exp((unpack(options[i : i + 1]) << 64) / liquidity);
           i++;
         }
       }

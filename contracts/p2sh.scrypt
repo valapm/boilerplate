@@ -1,7 +1,6 @@
-import "util.scrypt";
 
 contract P2SH {
-    Ripemd160 scriptHash;
+    PubKeyHash scriptHash;
 
     public function redeem(bytes redeemScript, SigHashPreimage txPreimage) {
         require(Tx.checkPreimage(txPreimage));
@@ -9,7 +8,7 @@ contract P2SH {
         require(hash160(redeemScript) == this.scriptHash);
 
         // use redeem script as the new locking script, while maintaining value
-        bytes output = Util.buildOutput(redeemScript, Util.value(txPreimage));
-        require(hash256(output) == Util.hashOutputs(txPreimage));
+        bytes output = Utils.buildOutput(redeemScript, SigHash.value(txPreimage));
+        require(hash256(output) == SigHash.hashOutputs(txPreimage));
     }
 }

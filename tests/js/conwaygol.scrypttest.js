@@ -1,5 +1,5 @@
 const { expect } = require('chai');
-const { bsv, buildContractClass, getPreimage, toHex, num2bin, SigHashPreimage } = require('scryptlib');
+const { bsv, buildContractClass, getPreimage, toHex, num2bin, SigHashPreimage, Bytes } = require('scryptlib');
 
 const {
   inputIndex,
@@ -17,48 +17,39 @@ describe('Test sCrypt contract Conways GOL In Javascript', () => {
 
   before(() => {
     const GameOfLife = buildContractClass(compileContract('conwaygol.scrypt'))
-    gol = new GameOfLife()
-
-    // set initial gol value
-    // 00000000000000
-    // 00000000000000
-    // 00010101000000
-    // 00000001000000
-    // 00010101000000
-    // 00000000000000
-    // 00000000000000
-    let row1 = '00000000000000'
-    let row2 = '00000000000000'
-    let row3 = '00010101000000'
-    let row4 = '00000001000000'
-    let row5 = '00010101000000'
-    let row6 = '00000000000000'
-    let row7 = '00000000000000'
-
-    // new board results
-    //            '00000000000000'
-    let newRow2 = '00000100000000'
-    let newRow3 = '00000101000000'
-    let newRow4 = '00000000010000'
-    let newRow5 = '00000101000000'
-    let newRow6 = '00000100000000'
-    //            '00000000000000'
-
 
     // TODO: This is a dumb way to do it but easier to visualize
     // original board
-    let board = row1+row2+row3+row4+row5+row6+row7
+    let board = [
+      0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0,
+      0, 1, 1, 1, 0, 0, 0,
+      0, 0, 0, 1, 0, 0, 0,
+      0, 1, 1, 1, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0
+    ];
+    gol = new GameOfLife(board)
     // new board
-    let newBoard = row1+newRow2+newRow3+newRow4+newRow5+newRow6+row1
-    gol.setDataPart(board)
-    const newLockingScript = [gol.codePart.toASM(), newBoard].join(' ')
+    let newBoard = [
+      0, 0, 0, 0, 0, 0, 0,
+      0, 0, 1, 0, 0, 0, 0,
+      0, 0, 1, 1, 0, 0, 0,
+      0, 0, 0, 0, 1, 0, 0,
+      0, 0, 1, 1, 0, 0, 0,
+      0, 0, 1, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0
+    ]
+    const newLockingScript = gol.getNewStateScript({
+      board: newBoard
+    })
 
     tx.addOutput(new bsv.Transaction.Output({
-      script: bsv.Script.fromASM(newLockingScript),
+      script: newLockingScript,
       satoshis: outputAmount
     }))
 
-    preimage = getPreimage(tx, gol.lockingScript.toASM(), inputSatoshis)
+    preimage = getPreimage(tx, gol.lockingScript, inputSatoshis)
 
     // set txContext for verification
     gol.txContext = {

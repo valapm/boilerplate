@@ -1,6 +1,8 @@
+dist: bionic
 language: node_js
 node_js:
- - "node"
+ - 14
+ - 16
 os:
   - linux
   - osx
@@ -10,8 +12,6 @@ os:
 #  - npm i -g npm@latest
 
 script:
-  - git clone -b master https://github.com/sCrypt-Inc/compiler_dist.git compiler
-  - cd compiler && npm run dl
-  - cd -
-  - npm install
-  - npm test -- --ci=true
+
+  - npx scryptlib download
+  - npm t

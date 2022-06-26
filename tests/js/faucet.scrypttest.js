@@ -1,5 +1,5 @@
 const { expect } = require('chai');
-const { bsv, buildContractClass, getPreimage, toHex, num2bin, SigHashPreimage, Ripemd160 } = require('scryptlib');
+const { bsv, buildContractClass, getPreimage, toHex, num2bin, SigHashPreimage, PubKeyHash } = require('scryptlib');
 
 const {
   inputIndex,
@@ -30,7 +30,7 @@ describe('Deposit', ()=>{
         satoshis: outputAmount
       }))
   
-      preimage = getPreimage(tx, faucet.lockingScript.toASM(), inputSatoshis);
+      preimage = getPreimage(tx, faucet.lockingScript, inputSatoshis);
   
       // set txContext for verification
       faucet.txContext = {
@@ -41,17 +41,17 @@ describe('Deposit', ()=>{
     });
   
     it('newContractOutputSatoshis = depositSatoshis + oldContractInputSatoshis, should successed', () => {
-      result = faucet.deposit(new SigHashPreimage(toHex(preimage)), depositAmount, new Ripemd160(toHex(pkh)), 0).verify();
+      result = faucet.deposit(new SigHashPreimage(toHex(preimage)), depositAmount, new PubKeyHash(toHex(pkh)), 0).verify();
       expect(result.success, result.error).to.be.true;
     });
   
     it('newContractOutputSatoshis > depositSatoshis + oldContractInputSatoshis, should fail', () => {
-      result = faucet.deposit(new SigHashPreimage(toHex(preimage)), depositAmount - 1, new Ripemd160(toHex(pkh)), 0).verify();
+      result = faucet.deposit(new SigHashPreimage(toHex(preimage)), depositAmount - 1, new PubKeyHash(toHex(pkh)), 0).verify();
       expect(result.success, result.error).to.be.false;
     });
 
     it('should no change when change amount < 546', ()=>{
-      result = faucet.deposit(new SigHashPreimage(toHex(preimage)), depositAmount, new Ripemd160(toHex(pkh)), 546).verify();
+      result = faucet.deposit(new SigHashPreimage(toHex(preimage)), depositAmount, new PubKeyHash(toHex(pkh)), 546).verify();
       expect(result.success, result.error).to.be.true;
     });
   });
@@ -79,7 +79,7 @@ describe('Deposit', ()=>{
         satoshis: changeAmount
       }));
   
-      preimage = getPreimage(tx, faucet.lockingScript.toASM(), inputSatoshis)
+      preimage = getPreimage(tx, faucet.lockingScript, inputSatoshis)
       faucet.txContext = {
         tx,
         inputIndex,
@@ -88,12 +88,12 @@ describe('Deposit', ()=>{
     });
   
     it('newContractOutputSatoshis = depositSatoshis + oldContractInputSatoshis, should successed.', ()=>{
-      result = faucet.deposit(new SigHashPreimage(toHex(preimage)), depositAmount, new Ripemd160(toHex(pkh)), changeAmount).verify();
+      result = faucet.deposit(new SigHashPreimage(toHex(preimage)), depositAmount, new PubKeyHash(toHex(pkh)), changeAmount).verify();
       expect(result.success, result.error).to.be.true;
     });
   
     it('changeSatoshisParam != changeOutputSatoshis, should fail', ()=>{
-      result = faucet.deposit(new SigHashPreimage(toHex(preimage)), depositAmount, new Ripemd160(toHex(pkh)), changeAmount+1).verify();
+      result = faucet.deposit(new SigHashPreimage(toHex(preimage)), depositAmount, new PubKeyHash(toHex(pkh)), changeAmount+1).verify();
       expect(result.success, result.error).to.be.false;
     });
   });
@@ -101,10 +101,9 @@ describe('Deposit', ()=>{
 
 describe('Withdraw', () => {
   let faucet, preimage, result, tx;
-  const withdrawAmount = 2000000;
-  const fee = 3000;
+  const withdrawAmount = 10000;
   const inputSatoshis = 10000000;
-  const outputAmount = inputSatoshis - withdrawAmount - fee;
+  const outputAmount = inputSatoshis - withdrawAmount;
   const matureTime = 1602553516;
 
   before(() => {
@@ -127,7 +126,7 @@ describe('Withdraw', () => {
     tx.inputs[0].sequenceNumber = 0xFFFFFFFE;
     tx.nLockTime = matureTime + 300;
 
-    preimage = getPreimage(tx, faucet.lockingScript.toASM(), inputSatoshis);
+    preimage = getPreimage(tx, faucet.lockingScript, inputSatoshis);
 
     // set txContext for verification
     faucet.txContext = {
@@ -135,7 +134,7 @@ describe('Withdraw', () => {
       inputIndex,
       inputSatoshis
     }
-    result = faucet.withdraw(new SigHashPreimage(toHex(preimage)), new Ripemd160(toHex(pkh))).verify();
+    result = faucet.withdraw(new SigHashPreimage(toHex(preimage)), new PubKeyHash(toHex(pkh)), outputAmount).verify();
     expect(result.success, result.error).to.be.true;
   });
 
@@ -152,7 +151,7 @@ describe('Withdraw', () => {
     tx.inputs[0].sequenceNumber = 0xFFFFFFFE;
     tx.nLockTime = matureTime + 299;
 
-    preimage = getPreimage(tx, faucet.lockingScript.toASM(), inputSatoshis);
+    preimage = getPreimage(tx, faucet.lockingScript, inputSatoshis);
 
     // set txContext for verification
     faucet.txContext = {
@@ -161,7 +160,7 @@ describe('Withdraw', () => {
       inputSatoshis
     };
 
-    result = faucet.withdraw(new SigHashPreimage(toHex(preimage)), new Ripemd160(toHex(pkh))).verify();
+    result = faucet.withdraw(new SigHashPreimage(toHex(preimage)), new PubKeyHash(toHex(pkh)), outputAmount).verify();
     expect(result.success, result.error).to.be.false;
   });
 
@@ -178,7 +177,7 @@ describe('Withdraw', () => {
     tx.inputs[0].sequenceNumber = 0xFFFFFFFE;
     tx.nLockTime = matureTime + 300;
 
-    preimage = getPreimage(tx, faucet.lockingScript.toASM(), inputSatoshis);
+    preimage = getPreimage(tx, faucet.lockingScript, inputSatoshis);
 
     // set txContext for verification
     faucet.txContext = {
@@ -187,7 +186,7 @@ describe('Withdraw', () => {
       inputSatoshis
     };
 
-    result = faucet.withdraw(new SigHashPreimage(toHex(preimage)), new Ripemd160(toHex(pkh))).verify();
+    result = faucet.withdraw(new SigHashPreimage(toHex(preimage)), new PubKeyHash(toHex(pkh)), outputAmount).verify();
     expect(result.success, result.error).to.be.false;
   });
 });

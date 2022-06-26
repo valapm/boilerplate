@@ -17,16 +17,18 @@ describe('Test sCrypt contract TokenSale In Javascript', () => {
     tokenSale = new TokenSale(tokenPriceInSatoshis)
 
     // initial empty state
-    tokenSale.setDataPart('')
+    tokenSale.setDataPart('00')
 
     getPreimageAfterPurchase = (publicKey) => {
-      const newLockingScriptHex = tokenSale.lockingScript.toHex() + toHex(publicKey) + num2bin(numTokens, DataLen)
+
+      const newLockingScript = [tokenSale.codePart.toASM(), toHex(publicKey) + num2bin(numTokens, DataLen)].join(' ')
+
       tx.addOutput(new bsv.Transaction.Output({
-        script: bsv.Script.fromHex(newLockingScriptHex),
+        script: bsv.Script.fromASM(newLockingScript),
         satoshis: inputSatoshis + numTokens * tokenPriceInSatoshis
       }))
 
-      return getPreimage(tx, tokenSale.lockingScript.toASM(), inputSatoshis)
+      return getPreimage(tx, tokenSale.lockingScript, inputSatoshis)
     }
   });
 
@@ -41,4 +43,4 @@ describe('Test sCrypt contract TokenSale In Javascript', () => {
       ).verify(context)
     expect(result.success, result.error).to.be.true
   });
-});
+ });

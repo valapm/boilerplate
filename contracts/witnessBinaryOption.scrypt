@@ -1,4 +1,3 @@
-import "util.scrypt";
 import "rabin.scrypt";
 
 contract WitnessBinaryOption {
@@ -6,11 +5,11 @@ contract WitnessBinaryOption {
   int decimal;
   int betPrice;
   int matureTime;
-  int witnessPubKey;
-  Ripemd160 pubKeyHashA;
-  Ripemd160 pubKeyHashB;
+  RabinPubKey witnessPubKey;
+  PubKeyHash pubKeyHashA;
+  PubKeyHash pubKeyHashB;
 
-  public function unlock(SigHashPreimage txPreimage, int price, int unlockTime, int witnessSig, bytes witnessPadding, int outAmount) {
+  public function unlock(SigHashPreimage txPreimage, int price, int unlockTime, int outAmount, RabinSig rabinSig) {
 
     // check preimage
     require(Tx.checkPreimage(txPreimage));
@@ -18,22 +17,21 @@ contract WitnessBinaryOption {
     require(unlockTime >= this.matureTime);
     // require(unlockTime <= this.matureTime + 3600);
 
-    RabinSignature rabin = new RabinSignature();
+
     //symbol+price(BigInt 32bytes)+decimal(UInt8)+timestamp(UInt32)
     bytes msg = this.symbol + num2bin(price, 32) + num2bin(this.decimal, 1) + num2bin(unlockTime, 4);
-    rabin.verifySig(witnessSig, msg, witnessPadding, this.witnessPubKey);
+    require(RabinSignature.checkSig(msg, rabinSig, this.witnessPubKey));
 
     // check price
     bytes outputScript = b'';
     if (price >= this.betPrice) {
-      outputScript = Util.buildPublicKeyHashScript(this.pubKeyHashA);
+      outputScript = Utils.buildPublicKeyHashScript(this.pubKeyHashA);
     } else {
-      outputScript = Util.buildPublicKeyHashScript(this.pubKeyHashB);
+      outputScript = Utils.buildPublicKeyHashScript(this.pubKeyHashB);
     }
 
     // check the output is the right winner
-    bytes outputHash = hash256(Util.buildOutput(outputScript, outAmount));
-    bytes outputHash2 = Util.hashOutputs(txPreimage);
-    require(outputHash == outputHash2);
+    bytes output = Utils.buildOutput(outputScript, outAmount);
+    require(hash256(output) == SigHash.hashOutputs(txPreimage));
   }
 }

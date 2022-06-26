@@ -1,0 +1,10 @@
+
+// CLTV without OP_CODESEPARATOR/OCS
+contract CheckLockTimeVerifyOCS {
+    int matureTime;
+
+    public function spend(SigHashPreimage txPreimage) {
+        require(SigHash.nLocktime(txPreimage) >= this.matureTime);
+        require(Tx.checkPreimageOCS(txPreimage));
+    }
+}

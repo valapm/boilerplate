@@ -3,7 +3,7 @@ const {
   bsv,
   buildContractClass,
   getPreimage,
-  Ripemd160,
+  PubKeyHash,
   toHex,
   SigHashPreimage,
 } = require('scryptlib');
@@ -30,14 +30,14 @@ const sighashType =
   Signature.SIGHASH_ALL |
   Signature.SIGHASH_FORKID;
 
-const outputAmount = inputSatoshis - 546; // minFee
+const outputAmount = inputSatoshis - 1000; // minFee
 
 describe('Test sCrypt contract AnyoneCanSpend in Javascript', () => {
   let acs, preimage, result;
 
   before(() => {
     const AnyoneCanSpend = buildContractClass(compileContract('acs.scrypt'));
-    acs = new AnyoneCanSpend(new Ripemd160(toHex(pkhX)));
+    acs = new AnyoneCanSpend(new PubKeyHash(toHex(pkhX)));
 
     tx.addOutput(
       new bsv.Transaction.Output({
@@ -48,7 +48,7 @@ describe('Test sCrypt contract AnyoneCanSpend in Javascript', () => {
 
     preimage = getPreimage(
       tx,
-      acs.lockingScript.toASM(),
+      acs.lockingScript,
       inputSatoshis,
       0,
       sighashType
@@ -63,12 +63,12 @@ describe('Test sCrypt contract AnyoneCanSpend in Javascript', () => {
   });
 
   it('should succeed when pushing right preimage', () => {
-    result = acs.unlock(new SigHashPreimage(toHex(preimage))).verify();
+    result = acs.unlock(new SigHashPreimage(toHex(preimage)), outputAmount).verify();
     expect(result.success, result.error).to.be.true;
   });
 
   it('should fail when pushing wrong preimage', () => {
-    result = acs.unlock(new SigHashPreimage(toHex(preimage) + '01')).verify();
+    result = acs.unlock(new SigHashPreimage(toHex(preimage) + '01'), outputAmount).verify();
     expect(result.success, result.error).to.be.false;
   });
 });

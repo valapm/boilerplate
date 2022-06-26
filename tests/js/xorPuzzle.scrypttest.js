@@ -11,6 +11,7 @@ const {
   signTx,
   toHex,
   Bytes,
+  readLaunchJson
 } = require('scryptlib');
 const {
   inputIndex,
@@ -48,7 +49,7 @@ const publicKeyDataHashBI = BigInt('0x' + publicKeyDataHashHex);
 
 const xorResult = dataBufHashBI ^ publicKeyDataHashBI;
 
-let xorResultHex = padLeadingZero(xorResult.toString(16));
+let xorResultHex = padLeadingZero(xorResult.toString(16), 32);
 
 const tx = newTx();
 
@@ -62,7 +63,7 @@ describe('Test sCrypt contract HashPuzzle In Javascript', () => {
     sig = signTx(
       tx,
       privateKeyA,
-      xorPuzzle.lockingScript.toASM(),
+      xorPuzzle.lockingScript,
       inputSatoshis
     );
   });
@@ -75,10 +76,11 @@ describe('Test sCrypt contract HashPuzzle In Javascript', () => {
         new Bytes(dataBufHashHex)
       )
       .verify();
+
     expect(result.success, result.error).to.be.true;
   });
-  
-  
+
+
   it('check should fail when wrong data provided', () => {
     result = xorPuzzle
       .unlock(

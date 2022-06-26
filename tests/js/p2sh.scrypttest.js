@@ -1,5 +1,5 @@
 const { expect } = require('chai');
-const { bsv, buildContractClass, Ripemd160, toHex, Bytes, getPreimage, SigHashPreimage } = require('scryptlib');
+const { bsv, buildContractClass, PubKeyHash, toHex, Bytes, getPreimage, SigHashPreimage } = require('scryptlib');
 
 /**
  * an example test for contract containing signature verification
@@ -12,14 +12,14 @@ describe('Test sCrypt contract P2SH In Javascript', () => {
 
   before(() => {
     const P2SH = buildContractClass(compileContract('p2sh.scrypt'))
-    const DemoContract = buildContractClass(compileContract('counter.scrypt'))
+    const DemoContract = buildContractClass(compileContract('counterRaw.scrypt'))
 
     demoContract = new DemoContract()
 
     const codeScript = demoContract.codePart.toBuffer()
     const scriptHash = bsv.crypto.Hash.sha256ripemd160( codeScript )
 
-    p2sh = new P2SH(new Ripemd160(toHex(scriptHash)))
+    p2sh = new P2SH(new PubKeyHash(toHex(scriptHash)))
 
 
     tx.addInput(new bsv.Transaction.Input({
@@ -37,7 +37,7 @@ describe('Test sCrypt contract P2SH In Javascript', () => {
   });
 
   it('redeem should succeed', () => {
-    preimage = getPreimage(tx, p2sh.lockingScript.toASM(), inputSatoshis, 0)
+    preimage = getPreimage(tx, p2sh.lockingScript, inputSatoshis, 0)
     // expect(toHex( p2sh.lockingScript.toBuffer())).is.eql(preimage.scriptCode)
 
     const codeScript = demoContract.codePart.toBuffer()

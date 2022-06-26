@@ -4,7 +4,7 @@ const {
   buildContractClass,
   PubKey,
   getPreimage,
-  Ripemd160,
+  PubKeyHash,
   Sig,
   signTx,
   toHex,
@@ -45,6 +45,10 @@ const hashSecret1 = bsv.crypto.Hash.sha256(secretBuf1);
 const secretBuf2 = Buffer.from("def");
 const hashSecret2 = bsv.crypto.Hash.sha256(secretBuf2);
 
+const privateKeyChange = new bsv.PrivateKey.fromRandom('testnet');
+const publicKeyChange = privateKeyChange.publicKey;
+const publicKeyHashChange = bsv.crypto.Hash.sha256ripemd160(publicKeyChange.toBuffer());
+
 const fee = 1000;
 
 const tx = newTx();
@@ -56,56 +60,58 @@ describe('Test sCrypt contract Escrow in Javascript', () => {
 
   before(() => {
     const Escrow = buildContractClass(compileContract('escrow.scrypt'));
-    escrow = new Escrow(new Ripemd160(toHex(publicKeyHashA)), new Ripemd160(toHex(publicKeyHashB)), new Ripemd160(toHex(publicKeyHashE)), new Sha256(toHex(hashSecret1)), new Sha256(toHex(hashSecret2)), fee);
-
+    escrow = new Escrow(new PubKeyHash(toHex(publicKeyHashA)), new PubKeyHash(toHex(publicKeyHashB)), new PubKeyHash(toHex(publicKeyHashE)), new Sha256(toHex(hashSecret1)), new Sha256(toHex(hashSecret2)));
+    const Signature = bsv.crypto.Signature
+    const sighashType = Signature.SIGHASH_ANYONECANPAY | Signature.SIGHASH_ALL | Signature.SIGHASH_FORKID
     switch(scenario) {
       case 1:
         tx.addOutput(new bsv.Transaction.Output({
           script: bsv.Script.buildPublicKeyHashOut(privateKeyA.toAddress()),
-          satoshis: amount / 2 - fee,
+          satoshis: amount / 2,
         }))
 
         tx.addOutput(new bsv.Transaction.Output({
           script: bsv.Script.buildPublicKeyHashOut(privateKeyB.toAddress()),
-          satoshis: amount / 2 - fee,
+          satoshis: amount / 2,
         }))
 
-        tx.fee(fee * 2);
+        tx.addOutput(new bsv.Transaction.Output({
+          script: bsv.Script.buildPublicKeyHashOut(privateKeyChange.toAddress()),
+          satoshis: 1000,
+        }))
 
-        sigA = signTx(tx, privateKeyA, escrow.lockingScript.toASM(), amount);
-        sigB = signTx(tx, privateKeyB, escrow.lockingScript.toASM(), amount);
+        sigA = signTx(tx, privateKeyA, escrow.lockingScript, amount);
+        sigB = signTx(tx, privateKeyB, escrow.lockingScript, amount);
 
         break;
       case 2:
         tx.addOutput(new bsv.Transaction.Output({
           script: bsv.Script.buildPublicKeyHashOut(privateKeyA.toAddress()),
-          satoshis: amount - fee,
+          satoshis: amount,
         }))
 
-        tx.fee(fee);
-
-        sigA = signTx(tx, privateKeyA, escrow.lockingScript.toASM(), amount);
-        sigE = signTx(tx, privateKeyE, escrow.lockingScript.toASM(), amount);
+        sigA = signTx(tx, privateKeyA, escrow.lockingScript, amount);
+        sigE = signTx(tx, privateKeyE, escrow.lockingScript, amount);
 
         break;
       case 3:
         tx.addOutput(new bsv.Transaction.Output({
           script: bsv.Script.buildPublicKeyHashOut(privateKeyB.toAddress()),
-          satoshis: amount - fee,
+          satoshis: amount ,
         }))
 
-        tx.fee(fee);
-
-        sigB = signTx(tx, privateKeyB, escrow.lockingScript.toASM(), amount);
-        sigE = signTx(tx, privateKeyE, escrow.lockingScript.toASM(), amount);
+        sigB = signTx(tx, privateKeyB, escrow.lockingScript, amount);
+        sigE = signTx(tx, privateKeyE, escrow.lockingScript, amount);
 
         break;
     }
     
     preimage = getPreimage(
       tx,
-      escrow.lockingScript.toASM(),
-      inputSatoshis
+      escrow.lockingScript,
+      inputSatoshis,
+      0,
+      sighashType
     );
 
     // set txContext for verification
@@ -125,7 +131,9 @@ describe('Test sCrypt contract Escrow in Javascript', () => {
           new Sig(toHex(sigA)),
           new PubKey(toHex(publicKeyB)),
           new Sig(toHex(sigB)),
-          new Bytes(toHex(''))
+          new Bytes(toHex('')),
+          new PubKeyHash(toHex(publicKeyHashChange)),
+          1000
         )
         .verify();
         expect(result.success, result.error).to.be.true;
@@ -138,7 +146,9 @@ describe('Test sCrypt contract Escrow in Javascript', () => {
           new Sig(toHex(sigA)),
           new PubKey(toHex(publicKeyB)),
           new Sig(toHex(sigB)),
-          new Bytes(toHex(''))
+          new Bytes(toHex('')),
+          new PubKeyHash(toHex(publicKeyHashChange)),
+          amount / 2 - fee
         )
         .verify();
         expect(result.success, result.error).to.be.false;
@@ -153,7 +163,9 @@ describe('Test sCrypt contract Escrow in Javascript', () => {
           new Sig(toHex(sigA)),
           new PubKey(toHex(publicKeyE)),
           new Sig(toHex(sigE)),
-          new Bytes(toHex(secretBuf1))
+          new Bytes(toHex(secretBuf1)),
+          new PubKeyHash(toHex(publicKeyHashChange)),
+          amount - fee
         )
         .verify();
         expect(result.success, result.error).to.be.true;
@@ -166,7 +178,9 @@ describe('Test sCrypt contract Escrow in Javascript', () => {
           new Sig(toHex(sigA)),
           new PubKey(toHex(publicKeyE)),
           new Sig(toHex(sigE)),
-          new Bytes(toHex(secretBuf1))
+          new Bytes(toHex(secretBuf1)),
+          new PubKeyHash(toHex(publicKeyHashChange)),
+          amount - fee
         )
         .verify();
         expect(result.success, result.error).to.be.false;
@@ -180,7 +194,9 @@ describe('Test sCrypt contract Escrow in Javascript', () => {
           new Sig(toHex(sigB)),
           new PubKey(toHex(publicKeyE)),
           new Sig(toHex(sigE)),
-          new Bytes(toHex(secretBuf2))
+          new Bytes(toHex(secretBuf2)),
+          new PubKeyHash(toHex(publicKeyHashChange)),
+          amount - fee
         )
         .verify();
         expect(result.success, result.error).to.be.true;
@@ -193,7 +209,9 @@ describe('Test sCrypt contract Escrow in Javascript', () => {
           new Sig(toHex(sigB)),
           new PubKey(toHex(publicKeyE)),
           new Sig(toHex(sigE)),
-          new Bytes(toHex(secretBuf2))
+          new Bytes(toHex(secretBuf2)),
+          new PubKeyHash(toHex(publicKeyHashChange)),
+          amount - fee
         )
         .verify();
         expect(result.success, result.error).to.be.false;

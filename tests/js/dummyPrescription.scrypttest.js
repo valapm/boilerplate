@@ -8,7 +8,8 @@ const {
   PubKey,
   toHex,
   Sig,
-  Ripemd160,
+  PubKeyHash,
+  buildTypeClasses,
 } = require("scryptlib");
 const { compileContract, inputIndex, newTx } = require("../../helper");
 const { generatePrivKey, privKeyToPubKey, sign } = require("rabinsig");
@@ -66,19 +67,23 @@ describe("Dummy Prescription", () => {
       compileContract("dummy_prescription.scrypt")
     );
 
+    const {RabinSig, RabinPubKey} = buildTypeClasses(DummyPrescription);
+
     // init prescription aka locking script
     dummyPrescription = new DummyPrescription(
-      prescriberSig.signature,
-      paddingBytes(prescriberSig.paddingByteCount),
       drug,
       expiration,
       new Bytes(prescriptionIDHex),
       patientReward,
-      new Ripemd160(toHex(publicKeyHashPatient)),
+      new PubKeyHash(toHex(publicKeyHashPatient)),
       [
         new PubKey(toHex(publicKeyPharmacy1)),
         new PubKey(toHex(publicKeyPharmacy2)),
-      ]
+      ],
+      new RabinSig({
+        s: prescriberSig.signature,
+        padding: paddingBytes(prescriberSig.paddingByteCount),
+      })
     );
 
     // add reward payout to user
@@ -94,14 +99,14 @@ describe("Dummy Prescription", () => {
     pharmacySig1 = signTx(
       tx,
       privateKeyPharmacy1,
-      dummyPrescription.lockingScript.toASM(),
+      dummyPrescription.lockingScript,
       inputSatoshis
     );
 
     // generate tx preImage
     preimage = getPreimage(
       tx,
-      dummyPrescription.lockingScript.toASM(),
+      dummyPrescription.lockingScript,
       inputSatoshis
     );
 
@@ -123,7 +128,7 @@ describe("Dummy Prescription", () => {
     const pharmacyImposterSig = signTx(
       tx,
       pharmacyImposterPrivKey,
-      dummyPrescription.lockingScript.toASM(),
+      dummyPrescription.lockingScript,
       inputSatoshis
     );
     result = dummyPrescription
@@ -165,13 +170,13 @@ describe("Dummy Prescription", () => {
     pharmacySig1 = signTx(
       tx,
       privateKeyPharmacy1,
-      dummyPrescription.lockingScript.toASM(),
+      dummyPrescription.lockingScript,
       inputSatoshis
     );
     // generate tx preImage
     preimage = getPreimage(
       tx,
-      dummyPrescription.lockingScript.toASM(),
+      dummyPrescription.lockingScript,
       inputSatoshis
     );
     result = dummyPrescription
