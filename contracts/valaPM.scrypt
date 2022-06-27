@@ -3,7 +3,7 @@ import "./fixLmsr.scrypt";
 import "./merkleTree.scrypt";
 import "./rabin.scrypt";
 
-// version: 0.3.14
+// version: 0.3.15
 contract PM {
   bytes oracleKeys;
   int globalOptionCount;
@@ -25,11 +25,10 @@ contract PM {
   static const int fixMathScaling = 18446744073709551616; // 2^64
   static const int satScalingAdjust = 44; // satStacling - fixMathScaling
 
+  static const int liquidityByteLength = 4; // Sufficient to 4294967295
+  static const int shareByteLength = 4; // Sufficient to 4294967295
   // static const int pubKeyLength = 32;
   static const int balanceTableByteLength = 32;
-
-  static const int entryLiqudityPos = 33;
-  static const int entrySharePos = 34;
 
   // Oracles
   static const int rabinKeyByteLength = 126;
@@ -109,11 +108,11 @@ contract PM {
     bytes prevBalanceTableRoot = scriptCode[balanceTableRootPos : ];
 
     // Global share status
-    int globalShareStatusPos = balanceTableRootPos - this.globalOptionCount;
+    int globalShareStatusPos = balanceTableRootPos - (this.globalOptionCount * shareByteLength);
     bytes prevGlobalShareStatus = scriptCode[globalShareStatusPos : balanceTableRootPos];
 
     // Global liquidity
-    int globalLiquidityPos = globalShareStatusPos - 1;
+    int globalLiquidityPos = globalShareStatusPos - liquidityByteLength;
     int prevGlobalLiquidity = unpack(scriptCode[globalLiquidityPos : globalShareStatusPos]);
 
     // Global liquidity points
@@ -155,7 +154,7 @@ contract PM {
       require(newLiquidity >= 0);
 
       // Verify that right amount of shares are passed. TODO: Might be unnecessary
-      int shareCount = len(newEntrySharesHex);
+      int shareCount = len(newEntrySharesHex) / shareByteLength;
       require(shareCount == this.globalOptionCount);
 
       int newGlobalLiquidity = 0;
@@ -180,11 +179,12 @@ contract PM {
         int i = 0;
         loop (MaxOptionCount) {
           if (i < this.globalOptionCount) {
-            int entryShares = unpack(newEntrySharesHex[i : i + 1]);
+            int sharePos = i * shareByteLength;
+            int entryShares = unpack(newEntrySharesHex[sharePos : sharePos + shareByteLength]);
             require(entryShares >= 0);
 
-            int newGlobalShares = unpack(prevGlobalShareStatus[i : i + 1]) + entryShares;
-            newGlobalShareStatus += num2bin(newGlobalShares, 1);
+            int newGlobalShares = unpack(prevGlobalShareStatus[sharePos : sharePos + shareByteLength]) + entryShares;
+            newGlobalShareStatus += num2bin(newGlobalShares, shareByteLength);
 
             i += 1;
           }
@@ -202,20 +202,22 @@ contract PM {
         bool redeemInvalid = false;
         if (prevGlobalDecided == 1 && publicKey == this.creatorPubKey) {
           // Check that winning shares aren't redeemed at the same time
-          redeemInvalid = prevEntrySharesHex[prevGlobalDecision : prevGlobalDecision + 1] == newEntrySharesHex[prevGlobalDecision : prevGlobalDecision + 1];
+          int sharePos = prevGlobalDecision * shareByteLength;
+          redeemInvalid = prevEntrySharesHex[sharePos : sharePos + shareByteLength] == newEntrySharesHex[sharePos : sharePos + shareByteLength];
         }
 
         int i = 0;
         loop (MaxOptionCount) {
           if (i < this.globalOptionCount) {
+            int sharePos = i * shareByteLength;
 
-            int entryShares = unpack(newEntrySharesHex[i : i + 1]);
+            int entryShares = unpack(newEntrySharesHex[sharePos : sharePos + shareByteLength]);
             require(entryShares >= 0); // Might be unnecessary
 
-            int prevShares = unpack(prevEntrySharesHex[i : i + 1]);
+            int prevShares = unpack(prevEntrySharesHex[sharePos : sharePos + shareByteLength]);
             int shareChange = entryShares - prevShares;
 
-            int prevGlobalShares = unpack(prevGlobalShareStatus[i : i + 1]);
+            int prevGlobalShares = unpack(prevGlobalShareStatus[sharePos : sharePos + shareByteLength]);
             int newGlobalShares = prevGlobalShares + shareChange;
 
             if (prevGlobalDecided == 1) {
@@ -229,7 +231,7 @@ contract PM {
               }
             }
 
-            newGlobalShareStatus += num2bin(newGlobalShares, 1);
+            newGlobalShareStatus += num2bin(newGlobalShares, shareByteLength);
             i += 1;
           }
         }
@@ -267,7 +269,7 @@ contract PM {
       if (action == 1) {
         bytes newLeaf = sha256(
           publicKey
-          + num2bin(newLiquidity, 1)
+          + num2bin(newLiquidity, liquidityByteLength)
           + newEntrySharesHex
           + num2bin(newGlobalAccLiquidityFeePool, liquidityFeePoolByteLen) // Save current sats in fee pool
           + num2bin(0, liquidityPointsByteLen) // User has 0 liquidity points
@@ -290,7 +292,7 @@ contract PM {
 
         bytes oldLeaf = sha256(
           publicKey
-          + num2bin(prevLiquidity, 1)
+          + num2bin(prevLiquidity, liquidityByteLength)
           + prevEntrySharesHex
           + num2bin(prevAccLiquidityFeePoolState, liquidityFeePoolByteLen)
           + num2bin(prevLiquidityPoints, liquidityPointsByteLen)
@@ -298,7 +300,7 @@ contract PM {
 
         bytes newLeaf = sha256(
           publicKey
-          + num2bin(newLiquidity, 1)
+          + num2bin(newLiquidity, liquidityByteLength)
           + newEntrySharesHex
           + num2bin(newGlobalAccLiquidityFeePool, liquidityFeePoolByteLen)  // Save current sats in fee pool
           + num2bin(newLiquidityPoints, liquidityPointsByteLen) // Save point to be redeemed at a later point
@@ -336,7 +338,7 @@ contract PM {
         + num2bin(newGlobalLiquidityFeePool, liquidityFeePoolByteLen)
         + num2bin(newGlobalAccLiquidityFeePool, liquidityFeePoolByteLen)
         + num2bin(newGlobalLiquidityPoints, liquidityPointsByteLen)
-        + num2bin(newGlobalLiquidity, 1)
+        + num2bin(newGlobalLiquidity, liquidityByteLength)
         + newGlobalShareStatus
         + newBalanceTableRoot;
 

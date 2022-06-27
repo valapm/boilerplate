@@ -1,15 +1,17 @@
 import "./fixMath.scrypt";
 
+
 /**
 * Implement the logarithmic market scoring rule using fixed point arithmetics.
 * Scaling factor if inputs is 1. Scaling factor of output is 2^16.
 * Max option count is 10.
 */
 library FixLMSR {
+  static const int shareByteLength = 4; // Sufficient to 4294967295
   static const int MaxOptionLength = 6;
 
   static function lmsr(bytes options, int liquidity) : int {
-    int optionCount = len(options);
+    int optionCount = len(options) / shareByteLength;
 
     int result = 0;
     int i = 0;
@@ -18,7 +20,8 @@ library FixLMSR {
       // Cover case where liquidity is 0
       loop (MaxOptionLength) {
         if (i < optionCount) {
-          x = unpack(options[i : i + 1]);
+          int sharePos = i * shareByteLength;
+          x = unpack(options[sharePos : sharePos + shareByteLength]);
           if (x > result) result = x;
           i++;
         }
@@ -28,7 +31,8 @@ library FixLMSR {
     } else {
       loop (MaxOptionLength) {
         if (i < optionCount) {
-          x = x + FixMath.exp((unpack(options[i : i + 1]) << 64) / liquidity);
+          int sharePos = i * shareByteLength;
+          x = x + FixMath.exp((unpack(options[sharePos : sharePos + shareByteLength]) << 64) / liquidity);
           i++;
         }
       }
