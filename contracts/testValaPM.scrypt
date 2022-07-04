@@ -3,7 +3,7 @@ import "./fixLmsr.scrypt";
 import "./merkleTree.scrypt";
 import "./rabin.scrypt";
 
-// version: 0.3.15
+// version: 0.4.0
 contract PM {
   bytes oracleKeys;
   int globalOptionCount;
@@ -27,8 +27,8 @@ contract PM {
 
   static const int liquidityByteLength = 4; // Sufficient to 4294967295
   static const int shareByteLength = 4; // Sufficient to 4294967295
-  // static const int pubKeyLength = 32;
-  static const int balanceTableByteLength = 32;
+
+  static const int hashByteLength = 32;
 
   // Oracles
   static const int rabinKeyByteLength = 126;
@@ -65,7 +65,7 @@ contract PM {
   */
   public function updateMarket(
     SigHashPreimage txPreimage,
-    int action, // 1 = add entry; 2 = update entry; 3 = oracle commit; 4 = oracle vote
+    int action, // 1 = add entry; 2 = update entry; 3 = oracle commit; 4 = oracle vote; 5 = update market json
 
     // Required for adding or modifying entry
     Ripemd160 payoutAddress, // Payout address for change and sold/redeemed shares
@@ -95,8 +95,13 @@ contract PM {
     // Inputs required for oracle vote
     int oracleDecision,
 
-    int dustLimit
+    int dustLimit,
+
+    // Inputs required for json update
+    bytes details
     ) {
+
+    require(action > 0 && action <= 5);
 
     // Extract current state parameters
     bytes scriptCode = SigHash.scriptCode(txPreimage);
@@ -104,7 +109,7 @@ contract PM {
     int oracleCount = len(this.oracleKeys) / oracleInfoByteLength;
 
     // Balance table merkleroot
-    int balanceTableRootPos = scriptLen - balanceTableByteLength;
+    int balanceTableRootPos = scriptLen - hashByteLength;
     bytes prevBalanceTableRoot = scriptCode[balanceTableRootPos : ];
 
     // Global share status
@@ -138,8 +143,8 @@ contract PM {
     bytes prevGlobalOracleStates = scriptCode[oracleStatesPos : globalVotesPos];
 
     // Global decision status
-    int gobalDecisionPos = oracleStatesPos - 2;
-    bytes prevGlobalDecisionState = scriptCode[gobalDecisionPos : oracleStatesPos];
+    int globalDecisionPos = oracleStatesPos - 2;
+    bytes prevGlobalDecisionState = scriptCode[globalDecisionPos : oracleStatesPos];
     int prevGlobalDecided = unpack(prevGlobalDecisionState[ : 1]);
     int prevGlobalDecision = unpack(prevGlobalDecisionState[1 : 2]);
 
@@ -367,82 +372,99 @@ contract PM {
       }
 
     }
-    else if (action == 3 || action == 4) {
+    else if (action == 3 || action == 4 || action == 5) {
       // Update oracle state
 
       // OP_PUSHTX with AnyoneCanPay and Sighash Single
       SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
-      require(Tx.checkPreimageSigHashType(txPreimage, sigHashType));
+      // require(Tx.checkPreimageSigHashType(txPreimage, sigHashType));
 
-      int oracleKeyPos = oraclePos * oracleInfoByteLength;
-      int oraclePubKey = unpack(this.oracleKeys[oracleKeyPos : oracleKeyPos + rabinKeyByteLength]);
-      int oracleVotes = unpack(this.oracleKeys[oracleKeyPos + rabinKeyByteLength : oracleKeyPos + oracleInfoByteLength]);
-      RabinSignature rabin = new RabinSignature();
+      bytes newScriptCode = b'';
 
-      // Prevent decision change in case that multiple outcomes have enough votes
-      require(prevGlobalDecided == 0);
+      if (action == 3|| action == 4) {
+        int oracleKeyPos = oraclePos * oracleInfoByteLength;
+        int oraclePubKey = unpack(this.oracleKeys[oracleKeyPos : oracleKeyPos + rabinKeyByteLength]);
+        int oracleVotes = unpack(this.oracleKeys[oracleKeyPos + rabinKeyByteLength : oracleKeyPos + oracleInfoByteLength]);
+        RabinSignature rabin = new RabinSignature();
 
-      // Verify signature
-      bytes outpoint = SigHash.outpoint(txPreimage);
-      bytes prevTxId = outpoint[ : 32];
-      bytes sigContent = b'';
-      if (action == 3) {
-        // Oracle should sign a commitment + txid
-        sigContent = commitmentHash + prevTxId;
-      }
-      else if (action == 4) {
-        // Oracle should sign a decision + txid
-        sigContent = num2bin(oracleDecision, 1) + prevTxId;
-      }
+        // Prevent decision change in case that multiple outcomes have enough votes
+        require(prevGlobalDecided == 0);
 
-      RabinSig sig = {
-        oracleSig,
-        num2bin(0, paddingCount)
-      };
-      require(RabinSignature.checkSig(sigContent, sig, oraclePubKey));
-
-      int oracleStatePos = oracleStateByteLength * oraclePos;
-      bytes prevOracleState = prevGlobalOracleStates[oracleStatePos : oracleStatePos + oracleStateByteLength];
-
-      bytes newOracleState = prevOracleState;
-      bytes newDecisionState = prevGlobalDecisionState;
-      bytes newGlobalVotes = prevGlobalVotes;
-      if (action == 3) {
-        newOracleState = b'01' + prevOracleState[1 : ];
-      }
-      else if (action == 4) {
-        require(prevOracleState[ : 1] == b'01'); // Oracle need to be commited to vote
-        require(prevOracleState[1 : ] == b'00'); // Oracle has not voted yet
-        newOracleState = b'0101'; // committed + voted
-
-        // Make shure decision is in range
-        require(oracleDecision >= 0 && oracleDecision < this.globalOptionCount);
-
-        // Add oracles votes
-        int voteSharePos = voteCountByteLen * oracleDecision;
-        int prevVotes = unpack(prevGlobalVotes[voteSharePos : voteSharePos + voteCountByteLen]);
-        int newShareVotes = prevVotes + oracleVotes;
-        newGlobalVotes = prevGlobalVotes[ : voteSharePos ] + num2bin(newShareVotes, voteCountByteLen) + prevGlobalVotes[voteSharePos + voteCountByteLen : ];
-
-        // If outcome has enough votes resolve market
-        if (newShareVotes >= this.requiredVotes) {
-          newDecisionState = b'01' + num2bin(oracleDecision, 1);
+        // Verify signature
+        bytes outpoint = SigHash.outpoint(txPreimage);
+        bytes prevTxId = outpoint[ : 32];
+        bytes sigContent = b'';
+        if (action == 3) {
+          // Oracle should sign a commitment + txid
+          sigContent = commitmentHash + prevTxId;
         }
+        else if (action == 4) {
+          // Oracle should sign a decision + txid
+          sigContent = num2bin(oracleDecision, 1) + prevTxId;
+        }
+
+        RabinSig sig = {
+          oracleSig,
+          num2bin(0, paddingCount)
+        };
+        require(RabinSignature.checkSig(sigContent, sig, oraclePubKey));
+
+        int oracleStatePos = oracleStateByteLength * oraclePos;
+        bytes prevOracleState = prevGlobalOracleStates[oracleStatePos : oracleStatePos + oracleStateByteLength];
+
+        bytes newOracleState = prevOracleState;
+        bytes newDecisionState = prevGlobalDecisionState;
+        bytes newGlobalVotes = prevGlobalVotes;
+        if (action == 3) {
+          newOracleState = b'01' + prevOracleState[1 : ];
+        }
+        else if (action == 4) {
+          require(prevOracleState[ : 1] == b'01'); // Oracle need to be commited to vote
+          require(prevOracleState[1 : ] == b'00'); // Oracle has not voted yet
+          newOracleState = b'0101'; // committed + voted
+
+          // Make shure decision is in range
+          require(oracleDecision >= 0 && oracleDecision < this.globalOptionCount);
+
+          // Add oracles votes
+          int voteSharePos = voteCountByteLen * oracleDecision;
+          int prevVotes = unpack(prevGlobalVotes[voteSharePos : voteSharePos + voteCountByteLen]);
+          int newShareVotes = prevVotes + oracleVotes;
+          newGlobalVotes = prevGlobalVotes[ : voteSharePos ] + num2bin(newShareVotes, voteCountByteLen) + prevGlobalVotes[voteSharePos + voteCountByteLen : ];
+
+          // If outcome has enough votes resolve market
+          if (newShareVotes >= this.requiredVotes) {
+            newDecisionState = b'01' + num2bin(oracleDecision, 1);
+          }
+        }
+
+        bytes newGlobalOracleStates = prevGlobalOracleStates[ : oracleStatePos]
+          + newOracleState
+          + prevGlobalOracleStates[oracleStatePos + oracleStateByteLength : ];
+
+        newScriptCode = scriptCode[ : globalDecisionPos]
+          + newDecisionState
+          + newGlobalOracleStates
+          + newGlobalVotes
+          + scriptCode[globalLiquidityFeePoolPos : ];
+
+      } else if (action == 5) {
+        // Market creator updates market json
+
+        // check market creator signature
+        // require(checkSig(signature, this.creatorPubKey));
+
+        // 1 byte OP_PUSHDATA1 and 1 byte for byte size
+        int jsonHashPos = globalDecisionPos - 2 - hashByteLength;
+
+        bytes detailsHash = sha256(details);
+        newScriptCode = scriptCode[ : jsonHashPos]
+          + detailsHash
+          + scriptCode[globalDecisionPos - 2 :];
       }
-
-      bytes newGlobalOracleStates = prevGlobalOracleStates[ : oracleStatePos]
-        + newOracleState
-        + prevGlobalOracleStates[oracleStatePos + oracleStateByteLength : ];
-
-      bytes newScriptCode = scriptCode[ : gobalDecisionPos]
-        + newDecisionState
-        + newGlobalOracleStates
-        + newGlobalVotes
-        + scriptCode[globalLiquidityFeePoolPos : ];
 
       bytes marketOutput = Utils.buildOutput(newScriptCode, SigHash.value(txPreimage));
       outputHash = hash256(marketOutput);
-
     }
 
     require(outputHash == SigHash.hashOutputs(txPreimage));
