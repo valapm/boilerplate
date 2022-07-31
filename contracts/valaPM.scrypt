@@ -3,7 +3,7 @@ import "./fixLmsr.scrypt";
 import "./merkleTree.scrypt";
 import "./rabin.scrypt";
 
-// version: 0.4.1
+// version: 0.5.0
 contract PM {
   bytes oracleKeys;
   int globalOptionCount;
@@ -39,6 +39,7 @@ contract PM {
 
   static const int liquidityFeePoolByteLen = 5;
   static const int liquidityPointsByteLen = 8;
+  static const int liquidityPointsScalingFactor = 64;
 
   // Hash of oracleCommitment.txt in the library.
   static const bytes commitmentHash = b'0E47D25DE560350A3717647DD69C4B5E190A46484589A20435CE79CE002E07DB';
@@ -81,9 +82,9 @@ contract PM {
     // Inputs required for modifying entry
     int prevLiquidity,
     bytes prevEntrySharesHex,
-    int prevAccLiquidityFeePoolState,
+    int prevAccLiquidityFeePoolSave,
     int prevLiquidityPoints,
-    bool redeemLiquidity,
+    bool redeemLiquidityPoints,
     Sig signature,
     bytes merklePath,
 
@@ -167,13 +168,11 @@ contract PM {
       bytes newBalanceTableRoot = b'';
 
       int redeemShares = 0; // Only relevant for redeeming shares
-      int redeemedLiquidityPoints = 0; // Only relevant for redeeming liquidity points
 
       int prevSatBalance = SigHash.value(txPreimage);
       int prevMarketSatBalance = prevSatBalance - prevGlobalLiquidityFeePool;
       int newMarketSatBalance = 0;
       int redeemSats = 0;
-      int liquidityFee = 0;
 
       // Determine new global shares
       if (action == 1) {
@@ -262,13 +261,16 @@ contract PM {
         }
       }
 
-
+      // Calculate liquidity fee
+      int liquiditySatFee = 0;
       if (redeemSats > 0) {
-        liquidityFee = this.liquidityFeeRate * redeemSats / 10000;
+        liquiditySatFee = this.liquidityFeeRate * redeemSats / 10000;
       }
 
-      // Calculate new accumulated, collected liquidity fees
-      int newGlobalAccLiquidityFeePool = prevGlobalAccLiquidityFeePool + liquidityFee;
+      // Calculate new global liquidity points and fees in pool
+      int newGlobalLiquidityPoints = prevGlobalLiquidityPoints + liquiditySatFee * prevGlobalLiquidity;
+      int newGlobalLiquidityFeePool = prevGlobalLiquidityFeePool + liquiditySatFee;
+      int newGlobalAccLiquidityFeePool = prevGlobalAccLiquidityFeePool + liquiditySatFee;
 
       // Determine new balance table merkle root
       if (action == 1) {
@@ -288,18 +290,29 @@ contract PM {
       } else if (action == 2) {
 
         // Calculate new entry liquidity points: Contributed liquidity * new fees since last change
-        int feesSinceLastChange = prevGlobalAccLiquidityFeePool - prevAccLiquidityFeePoolState + liquidityFee;
-        int newLiquidityPoints = prevLiquidityPoints + prevLiquidity * feesSinceLastChange;
-        if (redeemLiquidity) {
-          redeemedLiquidityPoints = newLiquidityPoints;
-          newLiquidityPoints = 0;
+        int feesSinceLastChange = newGlobalAccLiquidityFeePool - prevAccLiquidityFeePoolSave;
+        int newEntryLiquidityPoints = prevLiquidityPoints + prevLiquidity * feesSinceLastChange;
+
+        // Handle redeeming of liquidity points
+        if (redeemLiquidityPoints) {
+          int redeemedLiquidityPoints = newEntryLiquidityPoints;
+          newEntryLiquidityPoints = 0;
+
+          // Adjust new global balances
+          if (redeemedLiquidityPoints > 0 && newGlobalLiquidityPoints > 0) {
+            int scaledLiquidityPointsShare = (redeemedLiquidityPoints << liquidityPointsScalingFactor) / newGlobalLiquidityPoints;
+            int redeemedLiquidityPoolSats = (newGlobalLiquidityFeePool * scaledLiquidityPointsShare) >> liquidityPointsScalingFactor;
+
+            newGlobalLiquidityPoints = newGlobalLiquidityPoints - redeemedLiquidityPoints;
+            newGlobalLiquidityFeePool = newGlobalLiquidityFeePool - redeemedLiquidityPoolSats;
+          }
         }
 
         bytes oldLeaf = sha256(
           publicKey
           + num2bin(prevLiquidity, liquidityByteLength)
           + prevEntrySharesHex
-          + num2bin(prevAccLiquidityFeePoolState, liquidityFeePoolByteLen)
+          + num2bin(prevAccLiquidityFeePoolSave, liquidityFeePoolByteLen)
           + num2bin(prevLiquidityPoints, liquidityPointsByteLen)
           );
 
@@ -308,31 +321,16 @@ contract PM {
           + num2bin(newLiquidity, liquidityByteLength)
           + newEntrySharesHex
           + num2bin(newGlobalAccLiquidityFeePool, liquidityFeePoolByteLen)  // Save current sats in fee pool
-          + num2bin(newLiquidityPoints, liquidityPointsByteLen) // Save point to be redeemed at a later point
+          + num2bin(newEntryLiquidityPoints, liquidityPointsByteLen) // Save point to be redeemed at a later point
           );
 
         newBalanceTableRoot = MerkleTree.updateLeaf(oldLeaf,
           newLeaf,
           merklePath,
           prevBalanceTableRoot);
-
       }
-
-      // Remove redeemed liquidity fees from pool
-      int redeemedLiquidityPoolSats = 0;
-      if (prevGlobalLiquidityPoints > 0 && prevGlobalLiquidityFeePool > 0) {
-        redeemedLiquidityPoolSats = prevGlobalLiquidityFeePool * redeemedLiquidityPoints / prevGlobalLiquidityPoints;
-      }
-      int newGlobalLiquidityFeePool = prevGlobalLiquidityFeePool - redeemedLiquidityPoolSats;
-
-      // Add new fees to liquidity fee pool
-      newGlobalLiquidityFeePool = newGlobalLiquidityFeePool + liquidityFee;
 
       int newGlobalBalance = newMarketSatBalance + newGlobalLiquidityFeePool;
-
-      int newGlobalLiquidityPoints = prevGlobalLiquidityPoints
-        + liquidityFee * prevGlobalLiquidity
-        - redeemedLiquidityPoints;
 
       if (newGlobalBalance < dustLimit) {
         newGlobalBalance = dustLimit;
