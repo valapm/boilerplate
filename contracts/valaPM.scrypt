@@ -3,7 +3,7 @@ import "./fixLmsr.scrypt";
 import "./merkleTree.scrypt";
 import "./rabin.scrypt";
 
-// version: 0.5.0
+// version: 0.6.0
 contract PM {
   bytes oracleKeys;
   int globalOptionCount;
@@ -150,7 +150,11 @@ contract PM {
     int prevGlobalDecision = unpack(prevGlobalDecisionState[1 : 2]);
 
     bytes outputHash = b'';
+
+    int prevGlobalSatBalance = SigHash.value(txPreimage);
+
     if (action == 1 || action == 2) {
+      // Add or update entry
 
       SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.ALL | SigHash.FORKID;
       require(Tx.checkPreimageSigHashType(txPreimage, sigHashType));
@@ -163,22 +167,20 @@ contract PM {
       int shareCount = len(newEntrySharesHex) / shareByteLength;
       require(shareCount == this.globalOptionCount);
 
-      int newGlobalLiquidity = 0;
       bytes newGlobalShareStatus = b'';
       bytes newBalanceTableRoot = b'';
 
       int redeemShares = 0; // Only relevant for redeeming shares
 
-      int prevSatBalance = SigHash.value(txPreimage);
-      int prevMarketSatBalance = prevSatBalance - prevGlobalLiquidityFeePool;
-      int newMarketSatBalance = 0;
+      int prevMarketSatBalance = prevGlobalSatBalance - prevGlobalLiquidityFeePool;
       int redeemSats = 0;
+      int liquidityChange = 0;
 
-      // Determine new global shares
+      // Determine new global shares and liquidity
       if (action == 1) {
         // Add new entry
 
-        newGlobalLiquidity = prevGlobalLiquidity + newLiquidity;
+        liquidityChange = newLiquidity;
 
         int i = 0;
         loop (MaxOptionCount) {
@@ -195,20 +197,10 @@ contract PM {
         }
       } else if (action == 2) {
         // Update Entry
-        // TODO: Should market creator extract all liquidity as well?
 
         require(checkSig(signature, publicKey));
 
-        int liquidityChange = newLiquidity - prevLiquidity;
-        newGlobalLiquidity = prevGlobalLiquidity + liquidityChange;
-
-        // Market creator can sell all invalid shares when market is resolved
-        bool redeemInvalid = false;
-        if (prevGlobalDecided == 1 && publicKey == this.creatorPubKey) {
-          // Check that winning shares aren't redeemed at the same time
-          int sharePos = prevGlobalDecision * shareByteLength;
-          redeemInvalid = prevEntrySharesHex[sharePos : sharePos + shareByteLength] == newEntrySharesHex[sharePos : sharePos + shareByteLength];
-        }
+        liquidityChange = newLiquidity - prevLiquidity;
 
         int i = 0;
         loop (MaxOptionCount) {
@@ -226,12 +218,12 @@ contract PM {
 
             if (prevGlobalDecided == 1) {
               if (i == prevGlobalDecision) {
-                if (shareChange != 0) require(liquidityChange == 0); // For complexity reasons disallow redeeming and changing liquidity at the same time.
+                // For complexity reasons disallow redeeming and extracting liquidity at the same time.
+                if (shareChange != 0) require(liquidityChange == 0);
                 redeemShares = -shareChange;
               } else {
                 require(entryShares == 0); // Loosing share balance must be set to 0
                 newGlobalShares = prevGlobalShares; // Prevent selling of loosing shares after market is resolved
-                if (redeemInvalid) newGlobalShares = 0;
               }
             }
 
@@ -241,14 +233,36 @@ contract PM {
         }
       }
 
-      // Determine new contract sat balance
-      if (redeemShares != 0) {
-        // TODO: Should prevent redeeming invalid shares at the same time
-        // User only sold winning shares
+      int newGlobalLiquidity = prevGlobalLiquidity + liquidityChange;
+
+      // Determine new market sat balance
+      int newMarketSatBalance = prevMarketSatBalance;
+      if (prevGlobalDecided == 1) {
+        // Prevent adding shares or liquidity after market is resolved
+        require(redeemShares >= 0);   // Might be unnecessary
+        require(liquidityChange <= 0);
+
+        // Handle redemption of winning shares
         redeemSats = redeemShares * PM.satScaling;
-        newMarketSatBalance = prevMarketSatBalance - redeemSats;
+
+        // Allow liquidity extraction after market is resolved
+        // Does not charge fees
+        // All money not in fee pool or in winnig shares is given to LPs
+        int extractedLiquiditySats = 0;
+        if (liquidityChange < 0) {
+          // Determine liquidity change
+          int prevGlobalWinningShares = unpack(prevGlobalShareStatus[prevGlobalDecision : prevGlobalDecision + shareByteLength]);
+          int prevWinningSharesBalance = prevGlobalWinningShares * PM.satScaling;
+          int prevTotalLiquiditySats = prevGlobalSatBalance - prevWinningSharesBalance - prevGlobalLiquidityFeePool;
+
+          int liquidityPercentChange = (liquidityChange << 32) / prevGlobalLiquidity;
+          extractedLiquiditySats =  -(liquidityPercentChange * prevTotalLiquiditySats) >> 32;
+        }
+
+        newMarketSatBalance = prevMarketSatBalance - redeemSats - extractedLiquiditySats;
       } else {
-        // Market is either unresolved or user only changed liquidity
+        // Handle balance change while market is unresolved
+
         // FIXME: If user buys for as much as he sells, he can avoid fees. Not a big deal.
         int newLmsrBalance = FixLMSR.lmsr(newGlobalShareStatus, newGlobalLiquidity);
         newMarketSatBalance = newLmsrBalance >> PM.satScalingAdjust; // Need to be 2^20 * lmsr output
@@ -469,7 +483,7 @@ contract PM {
           + scriptCode[globalDecisionPos - pushDataBytes : ];
       }
 
-      bytes marketOutput = Utils.buildOutput(newScriptCode, SigHash.value(txPreimage));
+      bytes marketOutput = Utils.buildOutput(newScriptCode, prevGlobalSatBalance);
       outputHash = hash256(marketOutput);
     }
 
