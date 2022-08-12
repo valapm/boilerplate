@@ -3,7 +3,7 @@ import "./fixLmsr.scrypt";
 import "./merkleTree.scrypt";
 import "./rabin.scrypt";
 
-// version: 0.4.0
+// version: 0.6.0
 contract PM {
   bytes oracleKeys;
   int globalOptionCount;
@@ -39,6 +39,7 @@ contract PM {
 
   static const int liquidityFeePoolByteLen = 5;
   static const int liquidityPointsByteLen = 8;
+  static const int liquidityPointsScalingFactor = 64;
 
   // Hash of oracleCommitment.txt in the library.
   static const bytes commitmentHash = b'0E47D25DE560350A3717647DD69C4B5E190A46484589A20435CE79CE002E07DB';
@@ -81,9 +82,9 @@ contract PM {
     // Inputs required for modifying entry
     int prevLiquidity,
     bytes prevEntrySharesHex,
-    int prevAccLiquidityFeePoolState,
+    int prevAccLiquidityFeePoolSave,
     int prevLiquidityPoints,
-    bool redeemLiquidity,
+    bool redeemLiquidityPoints,
     Sig signature,
     bytes merklePath,
 
@@ -149,7 +150,11 @@ contract PM {
     int prevGlobalDecision = unpack(prevGlobalDecisionState[1 : 2]);
 
     bytes outputHash = b'';
+
+    int prevGlobalSatBalance = SigHash.value(txPreimage);
+
     if (action == 1 || action == 2) {
+      // Add or update entry
 
       SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.ALL | SigHash.FORKID;
       // require(Tx.checkPreimageSigHashType(txPreimage, sigHashType));
@@ -162,24 +167,20 @@ contract PM {
       int shareCount = len(newEntrySharesHex) / shareByteLength;
       require(shareCount == this.globalOptionCount);
 
-      int newGlobalLiquidity = 0;
       bytes newGlobalShareStatus = b'';
       bytes newBalanceTableRoot = b'';
 
       int redeemShares = 0; // Only relevant for redeeming shares
-      int redeemedLiquidityPoints = 0; // Only relevant for redeeming liquidity points
 
-      int prevSatBalance = SigHash.value(txPreimage);
-      int prevMarketSatBalance = prevSatBalance - prevGlobalLiquidityFeePool;
-      int newMarketSatBalance = 0;
+      int prevMarketSatBalance = prevGlobalSatBalance - prevGlobalLiquidityFeePool;
       int redeemSats = 0;
-      int liquidityFee = 0;
+      int liquidityChange = 0;
 
-      // Determine new global shares
+      // Determine new global shares and liquidity
       if (action == 1) {
         // Add new entry
 
-        newGlobalLiquidity = prevGlobalLiquidity + newLiquidity;
+        liquidityChange = newLiquidity;
 
         int i = 0;
         loop (MaxOptionCount) {
@@ -196,20 +197,10 @@ contract PM {
         }
       } else if (action == 2) {
         // Update Entry
-        // TODO: Should market creator extract all liquidity as well?
 
         // require(checkSig(signature, publicKey));
 
-        int liquidityChange = newLiquidity - prevLiquidity;
-        newGlobalLiquidity = prevGlobalLiquidity + liquidityChange;
-
-        // Market creator can sell all invalid shares when market is resolved
-        bool redeemInvalid = false;
-        if (prevGlobalDecided == 1 && publicKey == this.creatorPubKey) {
-          // Check that winning shares aren't redeemed at the same time
-          int sharePos = prevGlobalDecision * shareByteLength;
-          redeemInvalid = prevEntrySharesHex[sharePos : sharePos + shareByteLength] == newEntrySharesHex[sharePos : sharePos + shareByteLength];
-        }
+        liquidityChange = newLiquidity - prevLiquidity;
 
         int i = 0;
         loop (MaxOptionCount) {
@@ -227,12 +218,12 @@ contract PM {
 
             if (prevGlobalDecided == 1) {
               if (i == prevGlobalDecision) {
-                if (shareChange != 0) require(liquidityChange == 0); // For complexity reasons disallow redeeming and changing liquidity at the same time.
+                // For complexity reasons disallow redeeming and extracting liquidity at the same time.
+                if (shareChange != 0) require(liquidityChange == 0);
                 redeemShares = -shareChange;
               } else {
                 require(entryShares == 0); // Loosing share balance must be set to 0
                 newGlobalShares = prevGlobalShares; // Prevent selling of loosing shares after market is resolved
-                if (redeemInvalid) newGlobalShares = 0;
               }
             }
 
@@ -242,14 +233,37 @@ contract PM {
         }
       }
 
-      // Determine new contract sat balance
-      if (redeemShares != 0) {
-        // TODO: Should prevent redeeming invalid shares at the same time
-        // User only sold winning shares
+      int newGlobalLiquidity = prevGlobalLiquidity + liquidityChange;
+
+      // Determine new market sat balance
+      int newMarketSatBalance = prevMarketSatBalance;
+      if (prevGlobalDecided == 1) {
+        // Prevent adding shares or liquidity after market is resolved
+        require(redeemShares >= 0);   // Might be unnecessary
+        require(liquidityChange <= 0);
+
+        // Handle redemption of winning shares
         redeemSats = redeemShares * PM.satScaling;
-        newMarketSatBalance = prevMarketSatBalance - redeemSats;
+
+        // Allow liquidity extraction after market is resolved
+        // Does not charge fees
+        // All money not in fee pool or in winnig shares is given to LPs
+        int extractedLiquiditySats = 0;
+        if (liquidityChange < 0) {
+          // Determine liquidity change
+          int decisionPos = prevGlobalDecision * shareByteLength;
+          int prevGlobalWinningShares = unpack(prevGlobalShareStatus[decisionPos : decisionPos + shareByteLength]);
+          int prevWinningSharesBalance = prevGlobalWinningShares * PM.satScaling;
+          int prevTotalLiquiditySats = prevGlobalSatBalance - prevWinningSharesBalance - prevGlobalLiquidityFeePool;
+
+          int liquidityPercentChange = (liquidityChange << 32) / prevGlobalLiquidity;
+          extractedLiquiditySats =  -(liquidityPercentChange * prevTotalLiquiditySats) >> 32;
+        }
+
+        newMarketSatBalance = prevMarketSatBalance - redeemSats - extractedLiquiditySats;
       } else {
-        // Market is either unresolved or user only changed liquidity
+        // Handle balance change while market is unresolved
+
         // FIXME: If user buys for as much as he sells, he can avoid fees. Not a big deal.
         int newLmsrBalance = FixLMSR.lmsr(newGlobalShareStatus, newGlobalLiquidity);
         newMarketSatBalance = newLmsrBalance >> PM.satScalingAdjust; // Need to be 2^20 * lmsr output
@@ -262,13 +276,16 @@ contract PM {
         }
       }
 
-
+      // Calculate liquidity fee
+      int liquiditySatFee = 0;
       if (redeemSats > 0) {
-        liquidityFee = this.liquidityFeeRate * redeemSats / 10000;
+        liquiditySatFee = this.liquidityFeeRate * redeemSats / 10000;
       }
 
-      // Calculate new accumulated, collected liquidity fees
-      int newGlobalAccLiquidityFeePool = prevGlobalAccLiquidityFeePool + liquidityFee;
+      // Calculate new global liquidity points and fees in pool
+      int newGlobalLiquidityPoints = prevGlobalLiquidityPoints + liquiditySatFee * prevGlobalLiquidity;
+      int newGlobalLiquidityFeePool = prevGlobalLiquidityFeePool + liquiditySatFee;
+      int newGlobalAccLiquidityFeePool = prevGlobalAccLiquidityFeePool + liquiditySatFee;
 
       // Determine new balance table merkle root
       if (action == 1) {
@@ -288,18 +305,29 @@ contract PM {
       } else if (action == 2) {
 
         // Calculate new entry liquidity points: Contributed liquidity * new fees since last change
-        int feesSinceLastChange = prevGlobalAccLiquidityFeePool - prevAccLiquidityFeePoolState + liquidityFee;
-        int newLiquidityPoints = prevLiquidityPoints + prevLiquidity * feesSinceLastChange;
-        if (redeemLiquidity) {
-          redeemedLiquidityPoints = newLiquidityPoints;
-          newLiquidityPoints = 0;
+        int feesSinceLastChange = newGlobalAccLiquidityFeePool - prevAccLiquidityFeePoolSave;
+        int newEntryLiquidityPoints = prevLiquidityPoints + prevLiquidity * feesSinceLastChange;
+
+        // Handle redeeming of liquidity points
+        if (redeemLiquidityPoints) {
+          int redeemedLiquidityPoints = newEntryLiquidityPoints;
+          newEntryLiquidityPoints = 0;
+
+          // Adjust new global balances
+          if (redeemedLiquidityPoints > 0 && newGlobalLiquidityPoints > 0) {
+            int scaledLiquidityPointsShare = (redeemedLiquidityPoints << liquidityPointsScalingFactor) / newGlobalLiquidityPoints;
+            int redeemedLiquidityPoolSats = (newGlobalLiquidityFeePool * scaledLiquidityPointsShare) >> liquidityPointsScalingFactor;
+
+            newGlobalLiquidityPoints = newGlobalLiquidityPoints - redeemedLiquidityPoints;
+            newGlobalLiquidityFeePool = newGlobalLiquidityFeePool - redeemedLiquidityPoolSats;
+          }
         }
 
         bytes oldLeaf = sha256(
           publicKey
           + num2bin(prevLiquidity, liquidityByteLength)
           + prevEntrySharesHex
-          + num2bin(prevAccLiquidityFeePoolState, liquidityFeePoolByteLen)
+          + num2bin(prevAccLiquidityFeePoolSave, liquidityFeePoolByteLen)
           + num2bin(prevLiquidityPoints, liquidityPointsByteLen)
           );
 
@@ -308,31 +336,16 @@ contract PM {
           + num2bin(newLiquidity, liquidityByteLength)
           + newEntrySharesHex
           + num2bin(newGlobalAccLiquidityFeePool, liquidityFeePoolByteLen)  // Save current sats in fee pool
-          + num2bin(newLiquidityPoints, liquidityPointsByteLen) // Save point to be redeemed at a later point
+          + num2bin(newEntryLiquidityPoints, liquidityPointsByteLen) // Save point to be redeemed at a later point
           );
 
         newBalanceTableRoot = MerkleTree.updateLeaf(oldLeaf,
           newLeaf,
           merklePath,
           prevBalanceTableRoot);
-
       }
-
-      // Remove redeemed liquidity fees from pool
-      int redeemedLiquidityPoolSats = 0;
-      if (prevGlobalLiquidityPoints > 0 && prevGlobalLiquidityFeePool > 0) {
-        redeemedLiquidityPoolSats = prevGlobalLiquidityFeePool * redeemedLiquidityPoints / prevGlobalLiquidityPoints;
-      }
-      int newGlobalLiquidityFeePool = prevGlobalLiquidityFeePool - redeemedLiquidityPoolSats;
-
-      // Add new fees to liquidity fee pool
-      newGlobalLiquidityFeePool = newGlobalLiquidityFeePool + liquidityFee;
 
       int newGlobalBalance = newMarketSatBalance + newGlobalLiquidityFeePool;
-
-      int newGlobalLiquidityPoints = prevGlobalLiquidityPoints
-        + liquidityFee * prevGlobalLiquidity
-        - redeemedLiquidityPoints;
 
       if (newGlobalBalance < dustLimit) {
         newGlobalBalance = dustLimit;
@@ -377,7 +390,7 @@ contract PM {
 
       // OP_PUSHTX with AnyoneCanPay and Sighash Single
       SigHashType sigHashType = SigHash.ANYONECANPAY | SigHash.SINGLE | SigHash.FORKID;
-      // require(Tx.checkPreimageSigHashType(txPreimage, sigHashType));
+      require(Tx.checkPreimageSigHashType(txPreimage, sigHashType));
 
       bytes newScriptCode = b'';
 
@@ -452,18 +465,26 @@ contract PM {
         // Market creator updates market json
 
         // check market creator signature
-        // require(checkSig(signature, this.creatorPubKey));
+        require(checkSig(signature, this.creatorPubKey));
 
-        // 1 byte OP_PUSHDATA1 and 1 byte for byte size
-        int jsonHashPos = globalDecisionPos - 2 - hashByteLength;
+        // 1 byte OP_1 - OP_75
+        int pushDataBytes = 1;
+
+        int stateLen = len(scriptCode[globalDecisionPos : ]);
+        if (stateLen > 75) {
+          // 1 byte OP_PUSHDATA1 and 1 byte for byte size
+          pushDataBytes = 2;
+        }
+
+        int jsonHashPos = globalDecisionPos - pushDataBytes - hashByteLength;
 
         bytes detailsHash = sha256(details);
         newScriptCode = scriptCode[ : jsonHashPos]
           + detailsHash
-          + scriptCode[globalDecisionPos - 2 :];
+          + scriptCode[globalDecisionPos - pushDataBytes : ];
       }
 
-      bytes marketOutput = Utils.buildOutput(newScriptCode, SigHash.value(txPreimage));
+      bytes marketOutput = Utils.buildOutput(newScriptCode, prevGlobalSatBalance);
       outputHash = hash256(marketOutput);
     }
 

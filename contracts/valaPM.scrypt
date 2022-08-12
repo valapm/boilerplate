@@ -3,7 +3,7 @@ import "./fixLmsr.scrypt";
 import "./merkleTree.scrypt";
 import "./rabin.scrypt";
 
-// version: 0.6.0
+// version: 0.6.1
 contract PM {
   bytes oracleKeys;
   int globalOptionCount;
@@ -251,7 +251,8 @@ contract PM {
         int extractedLiquiditySats = 0;
         if (liquidityChange < 0) {
           // Determine liquidity change
-          int prevGlobalWinningShares = unpack(prevGlobalShareStatus[prevGlobalDecision : prevGlobalDecision + shareByteLength]);
+          int decisionPos = prevGlobalDecision * shareByteLength;
+          int prevGlobalWinningShares = unpack(prevGlobalShareStatus[decisionPos : decisionPos + shareByteLength]);
           int prevWinningSharesBalance = prevGlobalWinningShares * PM.satScaling;
           int prevTotalLiquiditySats = prevGlobalSatBalance - prevWinningSharesBalance - prevGlobalLiquidityFeePool;
 
