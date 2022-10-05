@@ -3,7 +3,7 @@ import "./fixLmsr.scrypt";
 import "./merkleTree.scrypt";
 import "./rabin.scrypt";
 
-// version: 0.6.0
+// version: 0.6.4
 contract PM {
   bytes oracleKeys;
   int globalOptionCount;
@@ -12,8 +12,6 @@ contract PM {
   Ripemd160 creatorPayoutAddress;
   int creatorFeeRate; // Trade fees in sats per 10000 sats payed to market creator
   int liquidityFeeRate; // Trade fees in sats per 10000 sats payed to liquidity providers
-
-  static const int p2pkhDust = 546;
 
   static const Ripemd160 developerAddress = Ripemd160(b'53faba2fb9a28dfa94d93270079cd2aa270180f3');
   static const int developerFeeRate = 20; // Trade fees in sats per 10000 sats payed to Vala
@@ -270,11 +268,13 @@ contract PM {
         redeemSats = prevMarketSatBalance - newMarketSatBalance;
 
         if (newGlobalShareStatus == prevGlobalShareStatus) {
-          // Do not calculate any fees if only liquidity is extracted
+          // Do not calculate any fees if only liquidity is extracted or added
           // FIXME: Fees are still added if balance is changed at the same time. Not important.
           redeemSats = 0;
         }
       }
+
+      redeemSats = abs(redeemSats); // Calculate fees for buying and selling
 
       // Calculate liquidity fee
       int liquiditySatFee = 0;
@@ -365,21 +365,23 @@ contract PM {
       bytes changeOutput = Utils.buildOutput(payoutScript, changeSats);
 
       if (redeemSats > 0) {
-        // User gets payed out and has to pay fees to developer and creator
-        int developerSatFee = developerFeeRate * redeemSats / 10000;
-        if (developerSatFee < p2pkhDust) {
-          developerSatFee = p2pkhDust;
-        }
-        int creatorSatFee = this.creatorFeeRate * redeemSats / 10000;
-        if (creatorSatFee < p2pkhDust) {
-          creatorSatFee = p2pkhDust;
-        }
-        bytes developerOutputScript = Utils.buildPublicKeyHashScript(developerAddress);
-        bytes creatorOutputScript = Utils.buildPublicKeyHashScript(this.creatorPayoutAddress);
-        bytes developerOutput = Utils.buildOutput(developerOutputScript, developerSatFee);
-        bytes creatorOutput = Utils.buildOutput(creatorOutputScript, creatorSatFee);
+        // User has to pay fees to developer and creator
 
-        outputHash = hash256(marketOutput + developerOutput + creatorOutput + changeOutput);
+        int developerSatFee = developerFeeRate * redeemSats / 10000;
+        bytes developerOutputScript = Utils.buildPublicKeyHashScript(developerAddress);
+        bytes developerOutput = Utils.buildOutput(developerOutputScript, developerSatFee);
+
+        bytes outputs = marketOutput + developerOutput;
+
+        int creatorSatFee = this.creatorFeeRate * redeemSats / 10000;
+        if (creatorSatFee > 0) {
+          bytes creatorOutputScript = Utils.buildPublicKeyHashScript(this.creatorPayoutAddress);
+          bytes creatorOutput = Utils.buildOutput(creatorOutputScript, creatorSatFee);
+          outputs += creatorOutput;
+        }
+
+        outputs += changeOutput;
+        outputHash = hash256(outputs);
       } else {
         outputHash = hash256(marketOutput + changeOutput);
       }

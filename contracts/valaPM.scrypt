@@ -3,7 +3,7 @@ import "./fixLmsr.scrypt";
 import "./merkleTree.scrypt";
 import "./rabin.scrypt";
 
-// version: 0.6.2
+// version: 0.6.4
 contract PM {
   bytes oracleKeys;
   int globalOptionCount;
@@ -268,11 +268,13 @@ contract PM {
         redeemSats = prevMarketSatBalance - newMarketSatBalance;
 
         if (newGlobalShareStatus == prevGlobalShareStatus) {
-          // Do not calculate any fees if only liquidity is extracted
+          // Do not calculate any fees if only liquidity is extracted or added
           // FIXME: Fees are still added if balance is changed at the same time. Not important.
           redeemSats = 0;
         }
       }
+
+      redeemSats = abs(redeemSats); // Calculate fees for buying and selling
 
       // Calculate liquidity fee
       int liquiditySatFee = 0;
@@ -363,7 +365,7 @@ contract PM {
       bytes changeOutput = Utils.buildOutput(payoutScript, changeSats);
 
       if (redeemSats > 0) {
-        // User gets payed out and has to pay fees to developer and creator
+        // User has to pay fees to developer and creator
 
         int developerSatFee = developerFeeRate * redeemSats / 10000;
         bytes developerOutputScript = Utils.buildPublicKeyHashScript(developerAddress);
