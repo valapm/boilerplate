@@ -20,14 +20,25 @@ library MerkleTree {
   }
 
   static function verifyLeaf(bytes leaf, bytes merklePath, bytes merkleRoot) : bool {
+    // Make sure that leaf is not just a mirrored leaf
+    bytes firstNeighbor = merklePath[0 : N - 1];
+    int firstLeft = unpack(merklePath[N - 1 : N]);
+    if (firstNeighbor == leaf) {
+      require(firstLeft == 1);
+    }
+
     bytes merkleValue = MerkleTree.calculateMerkleRoot(leaf, merklePath);
     return merkleValue == merkleRoot;
   }
 
-  static function updateLeaf(bytes oldLeaf,
-    bytes newLeaf,
+  static function updateLeaf(bytes oldEntry,
+    bytes newEntry,
     bytes merklePath,
     bytes oldMerkleRoot) : bytes {
+
+    // Make sure that entries are hashed twice
+    bytes oldLeaf = sha256(sha256(oldEntry));
+    bytes newLeaf = sha256(sha256(newEntry));
 
     int merklePathLength = len(merklePath) / N;
     bytes oldMerkleValue = oldLeaf;
@@ -38,7 +49,7 @@ library MerkleTree {
 
         int left = unpack(merklePath[i * N + N - 1 : i * N + N]);
         bytes oldNeighbor = merklePath[i * N : i * N + N - 1];
-        bytes newNeighbor = oldNeighbor == oldMerkleValue ? newMerkleValue : oldNeighbor;
+        bytes newNeighbor = oldNeighbor == oldMerkleValue ? newMerkleValue : oldNeighbor; // This also prevents updating mirrored leafs
 
         if (left) {
           oldMerkleValue = sha256(oldMerkleValue + oldNeighbor);
@@ -56,10 +67,20 @@ library MerkleTree {
     return newMerkleValue;
   }
 
-  static function addLeaf(bytes lastLeaf,
+  /**
+  *  Makes sure that
+  *  - the new leaf is added at the same depth as the other leafs.
+  +  - the new leaf is hashed twice before adding.
+  */
+  static function addLeaf(bytes lastEntry,
     bytes lastMerklePath,
     bytes oldMerkleRoot,
-    bytes newLeaf) : bytes {
+    bytes newEntry) : bytes {
+
+    // Make sure that entries are hashed twice
+    bytes lastLeaf = sha256(sha256(lastEntry));
+    bytes newLeaf = sha256(sha256(newEntry));
+
     require(MerkleTree.verifyLeaf(lastLeaf, lastMerklePath, oldMerkleRoot));
 
     int depth = len(lastMerklePath) / N;
@@ -96,16 +117,5 @@ library MerkleTree {
     }
 
     return merkleValue;
-  }
-
-  /**
-  *  Makes sure that the new leaf is added at the same depth.
-  */
-  static function addLeafSafe(bytes lastEntry,
-    bytes lastMerklePath,
-    bytes oldMerkleRoot,
-    bytes newLeaf) : bytes {
-    bytes lastLeaf = sha256(lastEntry);
-    return MerkleTree.addLeaf(lastLeaf, lastMerklePath, oldMerkleRoot, newLeaf);
   }
 }

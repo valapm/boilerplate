@@ -3,7 +3,7 @@ import "./fixLmsr.scrypt";
 import "./merkleTree.scrypt";
 import "./rabin.scrypt";
 
-// version: 0.6.4
+// version: 0.6.5
 contract PM {
   bytes oracleKeys;
   int globalOptionCount;
@@ -289,18 +289,16 @@ contract PM {
 
       // Determine new balance table merkle root
       if (action == 1) {
-        bytes newLeaf = sha256(
-          publicKey
+        bytes newEntry = publicKey
           + num2bin(newLiquidity, liquidityByteLength)
           + newEntrySharesHex
           + num2bin(newGlobalAccLiquidityFeePool, liquidityFeePoolByteLen) // Save current sats in fee pool
-          + num2bin(0, liquidityPointsByteLen) // User has 0 liquidity points
-          );
+          + num2bin(0, liquidityPointsByteLen); // User has 0 liquidity points
 
-        newBalanceTableRoot = MerkleTree.addLeafSafe(lastEntry,
+        newBalanceTableRoot = MerkleTree.addLeaf(lastEntry,
           lastMerklePath,
           prevBalanceTableRoot,
-          newLeaf);
+          newEntry);
 
       } else if (action == 2) {
 
@@ -323,24 +321,20 @@ contract PM {
           }
         }
 
-        bytes oldLeaf = sha256(
-          publicKey
+        bytes oldEntry = publicKey
           + num2bin(prevLiquidity, liquidityByteLength)
           + prevEntrySharesHex
           + num2bin(prevAccLiquidityFeePoolSave, liquidityFeePoolByteLen)
-          + num2bin(prevLiquidityPoints, liquidityPointsByteLen)
-          );
+          + num2bin(prevLiquidityPoints, liquidityPointsByteLen);
 
-        bytes newLeaf = sha256(
-          publicKey
+        bytes newEntry = publicKey
           + num2bin(newLiquidity, liquidityByteLength)
           + newEntrySharesHex
           + num2bin(newGlobalAccLiquidityFeePool, liquidityFeePoolByteLen)  // Save current sats in fee pool
-          + num2bin(newEntryLiquidityPoints, liquidityPointsByteLen) // Save point to be redeemed at a later point
-          );
+          + num2bin(newEntryLiquidityPoints, liquidityPointsByteLen); // Save point to be redeemed at a later point
 
-        newBalanceTableRoot = MerkleTree.updateLeaf(oldLeaf,
-          newLeaf,
+        newBalanceTableRoot = MerkleTree.updateLeaf(oldEntry,
+          newEntry,
           merklePath,
           prevBalanceTableRoot);
       }
@@ -467,7 +461,7 @@ contract PM {
         // Market creator updates market json
 
         // check market creator signature
-        require(checkSig(signature, this.creatorPubKey));
+        // require(checkSig(signature, this.creatorPubKey));
 
         // 1 byte OP_1 - OP_75
         int pushDataBytes = 1;
